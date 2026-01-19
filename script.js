@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-app.js";
-import { getFirestore, doc, onSnapshot, collection, getDocs, limit, query, setDoc, getDoc, addDoc, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-firestore.js";
+import { getFirestore, doc, onSnapshot, collection, getDocs, limit, query, setDoc, getDoc, addDoc, orderBy, serverTimestamp, where } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-auth.js";
 
 // Configuração Firebase
@@ -12,9 +12,7 @@ const firebaseConfig = {
     appId: "1:1033170939996:web:b3452cf42b16db1fbe3699"
 };
 
-// ID FIXO
 const appId = "starlight-tv-oficial-v1";
-
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -48,39 +46,53 @@ onAuthStateChanged(auth, async (user) => {
         const userSnap = await getDoc(userRef);
 
         if (userSnap.exists() && userSnap.data().username) {
-            // Tudo certo, entrar no app
             currentUserData = userSnap.data();
-            enterApp();
+            enterApp(true); // Flag para indicar que o usuário já estava logado (refresh)
         } else {
-            // Novo usuário, mostrar tela de username
             usernameScreen.classList.remove('hidden');
         }
     } else {
-        // Não logado
         loginScreen.classList.remove('hidden');
         setTimeout(() => loginScreen.classList.remove('opacity-0'), 10);
         appContainer.style.opacity = '0';
     }
 });
 
-function enterApp() {
+// Entrar no app e forçar unmuting
+function enterApp(isAutoLogin = false) {
     usernameScreen.classList.add('hidden');
     appContainer.style.opacity = '1';
-    console.log("Entrou como:", currentUserData.username);
+    console.log("Entrou como:", currentUserData?.username);
+
+    // AUDIO FIX: Se não for login automático (foi clique), desbloqueia o áudio
+    if (!isAutoLogin) {
+        unlockAudio();
+    }
+    
     initListeners();
     initChat();
     checkScheduleLoop();
 }
 
-// Login Actions
+function unlockAudio() {
+    videoElement.muted = false;
+    updateMuteIcon();
+    // Tenta iniciar um contexto de áudio ou tocar vazio para garantir permissão
+    videoElement.play().catch(() => {});
+}
+
+// Login Actions - Unmute ao clicar
 document.getElementById('btn-do-login').addEventListener('click', () => {
+    unlockAudio(); // Critical for Safari/Chrome autoplay policy
     const e = document.getElementById('login-email').value;
     const p = document.getElementById('login-password').value;
     if(!e || !p) return;
     
     document.getElementById('login-error').classList.add('hidden');
     
-    signInWithEmailAndPassword(auth, e, p).catch(err => {
+    signInWithEmailAndPassword(auth, e, p).then(() => {
+        enterApp(false);
+    }).catch(err => {
         const el = document.getElementById('login-error');
         if(err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
             el.innerText = "Email ou senha incorretos.";
@@ -92,16 +104,17 @@ document.getElementById('btn-do-login').addEventListener('click', () => {
 });
 
 document.getElementById('btn-do-signup').addEventListener('click', () => {
+    unlockAudio();
     const e = document.getElementById('login-email').value;
     const p = document.getElementById('login-password').value;
     if(!e || !p) return;
 
     document.getElementById('login-error').classList.add('hidden');
 
-    createUserWithEmailAndPassword(auth, e, p).catch(err => {
+    createUserWithEmailAndPassword(auth, e, p).then(() => {
+        enterApp(false);
+    }).catch(err => {
         const el = document.getElementById('login-error');
-        
-        // TRADUÇÃO DE ERROS
         if (err.code === 'auth/email-already-in-use') {
             el.innerText = "Este email já possui conta. Tente fazer login.";
         } else if (err.code === 'auth/weak-password') {
@@ -111,13 +124,12 @@ document.getElementById('btn-do-signup').addEventListener('click', () => {
         } else {
             el.innerText = "Erro ao criar: " + err.message;
         }
-        
         el.classList.remove('hidden');
     });
 });
 
-// Username Actions
 document.getElementById('btn-save-username').addEventListener('click', async () => {
+    unlockAudio();
     const username = document.getElementById('username-input').value.trim();
     if(username.length < 3) return alert('Nome muito curto!');
 
@@ -142,7 +154,7 @@ document.getElementById('btn-save-username').addEventListener('click', async () 
         }, { merge: true });
         
         currentUserData = { username };
-        enterApp();
+        enterApp(false);
     } catch(e) {
         console.error(e);
         errorEl.innerText = "Erro ao salvar. Tente outro.";
@@ -150,8 +162,8 @@ document.getElementById('btn-save-username').addEventListener('click', async () 
     }
 });
 
-// Tornar funções acessíveis globalmente para o HTML
 window.logout = () => signOut(auth).then(() => location.reload());
+
 window.sendMessage = async (e) => {
     e.preventDefault();
     const input = document.getElementById('chat-input');
@@ -191,9 +203,6 @@ window.toggleMute = () => {
     updateMuteIcon();
 };
 
-// ==========================================
-// FULLSCREEN COM ROTAÇÃO (Fix Mobile)
-// ==========================================
 window.toggleFullscreen = async () => {
     const wrapper = document.getElementById('video-wrapper');
     const video = document.getElementById('main-video');
@@ -203,12 +212,9 @@ window.toggleFullscreen = async () => {
             if (wrapper.requestFullscreen) {
                 await wrapper.requestFullscreen();
             } else if (video.webkitEnterFullscreen) {
-                // Suporte iOS nativo
                 video.webkitEnterFullscreen();
                 return; 
             }
-
-            // Tentar travar a orientação para Landscape (Android/Chrome)
             if (screen.orientation && screen.orientation.lock) {
                 await screen.orientation.lock('landscape').catch(e => {
                     console.log('Orientação automática não suportada ou bloqueada pelo navegador:', e);
@@ -220,7 +226,6 @@ window.toggleFullscreen = async () => {
     } else {
         try {
             await document.exitFullscreen();
-            // Destravar orientação ao sair
             if (screen.orientation && screen.orientation.unlock) {
                 screen.orientation.unlock();
             }
@@ -232,6 +237,27 @@ window.toggleFullscreen = async () => {
 
 // 2. Data Listeners (TV Logic)
 function initListeners() {
+    // Live Stream Override (Sincronização imediata forçada pelo admin)
+    onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'stream', 'live'), (snap) => {
+        const data = snap.data();
+        if(data && data.isLive) {
+            // Se o timestamp for muito recente (menos de 3s), força play
+            const now = Date.now();
+            if (now - data.startTime < 5000) {
+                 // Forçar troca imediata
+                 playProgram({
+                     id: 'live_override',
+                     title: data.title,
+                     desc: data.desc,
+                     url: data.url,
+                     image: data.image,
+                     category: 'AO VIVO',
+                     duration: 0
+                 }, 0);
+            }
+        }
+    });
+
     // Global Settings
     onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), (snap) => {
         globalSettings = snap.data() || {};
@@ -245,14 +271,22 @@ function initListeners() {
         }
     });
 
-    // Schedule Data
+    // Schedule Data (Filtrando dia da semana no front, ou pode ser na query)
     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'schedule'), (snap) => {
         schedule = [];
-        snap.forEach(d => schedule.push({id: d.id, ...d.data()}));
+        const today = new Date().getDay(); // 0 = Dom, 1 = Seg
+        
+        snap.forEach(d => {
+            const data = d.data();
+            // Se não tiver dia definido, assume todos os dias (legado) OU se for o dia de hoje
+            if (data.day === undefined || parseInt(data.day) === today) {
+                schedule.push({id: d.id, ...data});
+            }
+        });
+        
         // Sort by HH:MM
         schedule.sort((a,b) => a.time.localeCompare(b.time));
         renderScheduleSidebar();
-        // Trigger check immediately on update
         checkScheduleLoop();
     });
 }
@@ -299,7 +333,7 @@ function playProgram(item, targetTime) {
         updateUI(item);
     } else {
         const drift = Math.abs(videoElement.currentTime - targetTime);
-        if (drift > 5) {
+        if (drift > 5 && item.duration > 0) { // Não sincronizar se for stream infinito (duration 0)
             const syncBadge = document.getElementById('sync-status');
             syncBadge.classList.remove('hidden');
             videoElement.currentTime = targetTime;
@@ -323,7 +357,6 @@ function loadStream(url, startTime) {
     standbyScreen.classList.add('hidden');
     let finalUrl = url;
     
-    // Tratamento para extrair URL real da API anivideo se necessário
     if (url.includes('api.anivideo.net')) {
         try {
             const u = new URL(url);
@@ -333,12 +366,14 @@ function loadStream(url, startTime) {
 
     const onReady = () => {
         videoElement.currentTime = startTime;
-        videoElement.play().catch(e => {
-            console.warn("Autoplay bloqueado pelo navegador. Tentando mutado...", e);
+        // Tentativa agressiva de tocar com som se desbloqueado
+        videoElement.play().then(() => {
+            updateMuteIcon();
+        }).catch(e => {
+            console.warn("Autoplay bloqueado. Mutando.", e);
             videoElement.muted = true;
             videoElement.play();
         });
-        updateMuteIcon();
     };
 
     if (Hls.isSupported() && (finalUrl.includes('.m3u8') || url.includes('.m3u8'))) {
@@ -367,8 +402,13 @@ function renderScheduleSidebar() {
     const list = document.getElementById('schedule-list');
     list.innerHTML = '';
     
+    // Mostra o dia da semana
+    const days = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+    const today = new Date().getDay();
+    document.getElementById('schedule-day-label').innerText = days[today].toUpperCase();
+
     if(schedule.length === 0) {
-        list.innerHTML = '<div class="text-zinc-500 text-xs text-center p-4">Grade vazia.</div>';
+        list.innerHTML = '<div class="text-zinc-500 text-xs text-center p-4">Grade vazia para hoje.</div>';
         return;
     }
 
@@ -414,7 +454,6 @@ function initChat() {
             `;
             container.appendChild(el);
         });
-        // Auto scroll to bottom
         container.scrollTop = container.scrollHeight;
     });
 }
@@ -431,7 +470,6 @@ function updateMuteIcon() {
     lucide.createIcons();
 }
 
-// Progress Bar Update
 videoElement.addEventListener('timeupdate', () => {
     if(currentProgram) {
         const [h, m] = currentProgram.time.split(':').map(Number);
@@ -444,13 +482,11 @@ videoElement.addEventListener('timeupdate', () => {
     }
 });
 
-// Clock
 setInterval(() => {
     const d = new Date();
     document.getElementById('clock').innerText = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 }, 1000);
 
-// Initialize icons & mouse controls
 lucide.createIcons();
 
 let timer;
