@@ -30,6 +30,7 @@ const appContainer = document.getElementById('app-container');
 // Estado
 let schedule = [];
 let currentProgram = null;
+let hls = null;
 let globalSettings = {};
 let currentUserData = null;
 let isStarted = false;
@@ -108,7 +109,7 @@ function handleAuthError(err) {
 
 function toggleLoginLoading(isLoading) {
     const btn = document.getElementById('btn-do-login');
-    btn.innerText = isLoading ? "..." : "ENTRAR";
+    btn.innerText = isLoading ? "..." : "CONECTAR";
     btn.disabled = isLoading;
 }
 
@@ -258,9 +259,10 @@ function loadStream(url, startTime) {
 
 function updateUI(item) {
     document.getElementById('program-title').innerText = item.title;
-    document.getElementById('program-desc').innerText = item.desc || '';
+    // Descrição pode não existir no novo design mobile, mas mantemos update seguro
+    // document.getElementById('program-desc').innerText = item.desc || '';
     document.getElementById('program-category').innerText = item.category || 'NO AR';
-    document.getElementById('program-poster').src = item.image || '';
+    // document.getElementById('program-poster').src = item.image || '';
     renderScheduleSidebar();
 }
 
@@ -269,7 +271,7 @@ function renderScheduleSidebar() {
     list.innerHTML = '';
     
     if(schedule.length === 0) {
-        list.innerHTML = '<div class="text-zinc-500 text-xs text-center p-4">Grade vazia.</div>';
+        list.innerHTML = '<div class="text-zinc-500 text-xs text-center p-4">Dados insuficientes.</div>';
         return;
     }
 
@@ -279,13 +281,13 @@ function renderScheduleSidebar() {
         div.className = `program-item ${isActive ? 'active' : ''}`;
         div.innerHTML = `
             <div class="text-center min-w-[50px]">
-                <div class="text-sm font-bold text-white font-mono">${item.time}</div>
-                ${isActive ? '<div class="text-[10px] text-violet-400 font-bold animate-pulse mt-1">NO AR</div>' : ''}
+                <div class="text-xs font-bold text-white font-mono">${item.time}</div>
+                ${isActive ? '<div class="text-[9px] text-cyan-400 font-bold animate-pulse mt-1">ON</div>' : ''}
             </div>
-            <img src="${item.image || ''}" class="w-10 h-14 object-cover rounded bg-black/50">
+            <img src="${item.image || ''}" class="w-10 h-10 object-cover rounded bg-white/10 grayscale ${isActive ? 'grayscale-0' : ''}">
             <div class="min-w-0 flex-1">
-                <div class="text-sm font-bold text-white truncate">${item.title}</div>
-                <div class="text-[10px] text-zinc-400">${item.category} • ${item.duration}m</div>
+                <div class="text-xs font-bold text-white truncate font-display tracking-wide">${item.title}</div>
+                <div class="text-[9px] text-zinc-500 font-mono">${item.category} • ${item.duration}m</div>
             </div>
         `;
         list.appendChild(div);
@@ -311,10 +313,10 @@ function initChat() {
 
             el.innerHTML = `
                 <div class="flex items-baseline justify-between mb-1 gap-2">
-                    <span class="font-bold text-xs ${isMe ? 'text-violet-400' : 'text-zinc-400'}">${msg.username}</span>
-                    <span class="text-[9px] text-zinc-600 opacity-50">${timeStr}</span>
+                    <span class="font-bold text-[10px] ${isMe ? 'text-cyan-400' : 'text-zinc-400'} uppercase tracking-wider">${msg.username}</span>
+                    <span class="text-[9px] text-zinc-700">${timeStr}</span>
                 </div>
-                <div class="text-sm text-zinc-200 break-words leading-snug">${msg.text}</div>
+                <div class="text-xs text-zinc-300 break-words leading-snug">${msg.text}</div>
             `;
             container.appendChild(el);
             lastMsg = el;
@@ -383,7 +385,7 @@ window.toggleFullscreen = async () => {
             // Tentar travar a orientação para Landscape (Android/Chrome)
             if (screen.orientation && screen.orientation.lock) {
                 await screen.orientation.lock('landscape').catch(e => {
-                    console.log('Orientação automática não suportada ou bloqueada pelo navegador:', e);
+                    console.log('Orientação automática não suportada:', e);
                 });
             }
         } catch (err) {
