@@ -321,29 +321,34 @@ function goStandby() {
 
 function loadStream(url, startTime) {
     standbyScreen.classList.add('hidden');
-    let urlToLoad = url;
-    try {
-        if (url.includes('api.anivideo.net')) {
+    let finalUrl = url;
+    
+    // Tratamento para extrair URL real da API anivideo se necessário
+    if (url.includes('api.anivideo.net')) {
+        try {
             const u = new URL(url);
-            const d = u.searchParams.get('d');
-            if (d) urlToLoad = d;
-        }
-    } catch(e) {}
+            if(u.searchParams.get('d')) finalUrl = u.searchParams.get('d');
+        } catch(e){}
+    }
 
     const onReady = () => {
         videoElement.currentTime = startTime;
-        videoElement.play().catch(e => console.log("Autoplay req interaction"));
+        videoElement.play().catch(e => {
+            console.warn("Autoplay bloqueado pelo navegador. Tentando mutado...", e);
+            videoElement.muted = true;
+            videoElement.play();
+        });
         updateMuteIcon();
     };
 
-    if (Hls.isSupported() && (urlToLoad.includes('.m3u8') || url.includes('.m3u8'))) {
+    if (Hls.isSupported() && (finalUrl.includes('.m3u8') || url.includes('.m3u8'))) {
         if (hls) hls.destroy();
         hls = new Hls();
-        hls.loadSource(urlToLoad);
+        hls.loadSource(finalUrl);
         hls.attachMedia(videoElement);
         hls.on(Hls.Events.MANIFEST_PARSED, onReady);
     } else {
-        videoElement.src = urlToLoad;
+        videoElement.src = finalUrl;
         videoElement.addEventListener('loadedmetadata', onReady);
     }
 }
