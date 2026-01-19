@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-app.js";
-import { getFirestore, doc, onSnapshot, collection, getDocs, limit, query, setDoc, getDoc, addDoc, orderBy, serverTimestamp, where } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-firestore.js";
+import { getFirestore, doc, onSnapshot, collection, query, addDoc, orderBy, serverTimestamp, getDoc, setDoc, limit } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-auth.js";
 
 // Configuração Firebase
@@ -17,91 +17,70 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// Elementos DOM
+// DOM Elements
 const videoElement = document.getElementById('main-video');
 const standbyScreen = document.getElementById('standby-screen');
 const loginScreen = document.getElementById('login-screen');
-const usernameScreen = document.getElementById('username-screen');
 const appContainer = document.getElementById('app-container');
 
-// Estado
+// State
 let schedule = [];
 let currentProgram = null;
 let hls = null;
-let globalSettings = {};
 let currentUserData = null;
-let isVideoFitCover = true; // NOVO: Controle de Zoom
+let isVideoFitCover = true; // Estado do Zoom
 
 // ==========================================
-// 1. FLUXO DE AUTENTICAÇÃO E AUDIO FIX
+// 1. AUTENTICAÇÃO
 // ==========================================
-
-// Função crítica: Desbloqueia o áudio aproveitando o clique do usuário
+// Função crítica: Desbloqueia o áudio
 function unlockAudio() {
     videoElement.muted = false;
     updateMuteIcon();
-    // Tenta iniciar um contexto de áudio ou tocar vazio para garantir permissão
     videoElement.play().catch(() => {});
 }
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
-        // Usuário logado
-        loginScreen.classList.add('opacity-0');
-        setTimeout(() => loginScreen.classList.add('hidden'), 500);
-
         const userRef = doc(db, 'artifacts', appId, 'users', user.uid);
         const userSnap = await getDoc(userRef);
-
+        
         if (userSnap.exists() && userSnap.data().username) {
             currentUserData = userSnap.data();
-            enterApp(true); // Flag true = já estava logado (refresh da página)
+            loginScreen.classList.add('hidden');
+            appContainer.style.opacity = '1';
+            
+            // Se já estava logado, inicia direto
+            initSystem();
+            enterApp(true);
         } else {
-            usernameScreen.classList.remove('hidden');
+            document.getElementById('username-screen').classList.remove('hidden');
+            loginScreen.classList.add('hidden');
         }
     } else {
         loginScreen.classList.remove('hidden');
-        setTimeout(() => loginScreen.classList.remove('opacity-0'), 10);
         appContainer.style.opacity = '0';
     }
 });
 
 // Entrar no app
 function enterApp(isAutoLogin = false) {
-    usernameScreen.classList.add('hidden');
-    appContainer.style.opacity = '1';
-    
-    // Se NÃO for login automático (foi interação manual agora), desbloqueia o áudio
-    if (!isAutoLogin) {
-        unlockAudio();
-    }
-    
-    initListeners();
-    initChat();
-    checkScheduleLoop();
-
-    // NOVO: Intervalo para garantir sincronização automática sem refresh
-    setInterval(checkScheduleLoop, 1000);
+    if (!isAutoLogin) unlockAudio();
+    // O setInterval é chamado no initSystem, evitamos duplicidade aqui se já foi chamado
 }
 
-// Login Actions - Unmute ao clicar
+// Botões de Login
 document.getElementById('btn-do-login').addEventListener('click', () => {
-    unlockAudio(); // Critical for autoplay policy
+    unlockAudio();
     const e = document.getElementById('login-email').value;
     const p = document.getElementById('login-password').value;
     if(!e || !p) return;
-    
-    document.getElementById('login-error').classList.add('hidden');
     
     signInWithEmailAndPassword(auth, e, p).then(() => {
         enterApp(false);
     }).catch(err => {
         const el = document.getElementById('login-error');
-        if(err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-            el.innerText = "Email ou senha incorretos.";
-        } else {
-            el.innerText = "Erro ao entrar: " + err.message;
-        }
+        el.innerText = "Erro ao entrar: " + err.message;
         el.classList.remove('hidden');
     });
 });
@@ -112,21 +91,11 @@ document.getElementById('btn-do-signup').addEventListener('click', () => {
     const p = document.getElementById('login-password').value;
     if(!e || !p) return;
 
-    document.getElementById('login-error').classList.add('hidden');
-
     createUserWithEmailAndPassword(auth, e, p).then(() => {
         enterApp(false);
     }).catch(err => {
         const el = document.getElementById('login-error');
-        if (err.code === 'auth/email-already-in-use') {
-            el.innerText = "Este email já possui conta. Tente fazer login.";
-        } else if (err.code === 'auth/weak-password') {
-            el.innerText = "A senha deve ter pelo menos 6 caracteres.";
-        } else if (err.code === 'auth/invalid-email') {
-            el.innerText = "Email inválido.";
-        } else {
-            el.innerText = "Erro ao criar: " + err.message;
-        }
+        el.innerText = "Erro ao criar: " + err.message;
         el.classList.remove('hidden');
     });
 });
@@ -134,148 +103,60 @@ document.getElementById('btn-do-signup').addEventListener('click', () => {
 document.getElementById('btn-save-username').addEventListener('click', async () => {
     unlockAudio();
     const username = document.getElementById('username-input').value.trim();
-    if(username.length < 3) return alert('Nome muito curto!');
-
-    const errorEl = document.getElementById('username-error');
-    errorEl.classList.add('hidden');
-
-    const usernameRef = doc(db, 'artifacts', appId, 'usernames', username.toLowerCase());
-    const usernameSnap = await getDoc(usernameRef);
-
-    if(usernameSnap.exists()) {
-        errorEl.innerText = "Este nome de usuário já está em uso.";
-        errorEl.classList.remove('hidden');
-        return;
-    }
-
-    try {
-        const uid = auth.currentUser.uid;
-        await setDoc(usernameRef, { uid: uid });
-        await setDoc(doc(db, 'artifacts', appId, 'users', uid), { 
-            username: username,
-            email: auth.currentUser.email
-        }, { merge: true });
-        
-        currentUserData = { username };
-        enterApp(false);
-    } catch(e) {
-        console.error(e);
-        errorEl.innerText = "Erro ao salvar. Tente outro.";
-        errorEl.classList.remove('hidden');
-    }
+    if(username.length < 3) return;
+    
+    const uid = auth.currentUser.uid;
+    await setDoc(doc(db, 'artifacts', appId, 'users', uid), { 
+        username: username,
+        email: auth.currentUser.email
+    }, { merge: true });
+    
+    document.getElementById('username-screen').classList.add('hidden');
+    appContainer.style.opacity = '1';
+    currentUserData = { username };
+    initSystem();
 });
 
-// Funções Globais
 window.logout = () => signOut(auth).then(() => location.reload());
 
-window.sendMessage = async (e) => {
-    e.preventDefault();
-    const input = document.getElementById('chat-input');
-    const text = input.value.trim();
-    if(!text || !currentUserData) return;
-
-    input.value = '';
+// ==========================================
+// 2. SISTEMA DE TV (AUTO-DJ)
+// ==========================================
+function initSystem() {
+    initListeners(); // Schedule + Chat + Live Override
     
-    // Foca de volta no input apenas se não for mobile (para teclado não ficar subindo/descendo)
-    if(window.innerWidth > 768) input.focus();
+    // Loop de Verificação Crítico (Roda a cada 1 segundo)
+    setInterval(checkScheduleLoop, 1000);
+}
 
-    try {
-        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'chat'), {
-            text: text,
-            username: currentUserData.username,
-            uid: auth.currentUser.uid,
-            timestamp: serverTimestamp()
-        });
-    } catch(e) {
-        console.error("Erro ao enviar msg:", e);
-    }
-};
-
-window.switchSidebarTab = (tab) => {
-    const chatBtn = document.getElementById('tab-chat');
-    const gradeBtn = document.getElementById('tab-grade');
-    const chatContent = document.getElementById('content-chat');
-    const gradeContent = document.getElementById('content-grade');
-
-    if (tab === 'chat') {
-        if(chatBtn) chatBtn.classList.add('active');
-        if(gradeBtn) gradeBtn.classList.remove('active');
-        if(chatContent) chatContent.classList.remove('hidden');
-        if(gradeContent) gradeContent.classList.add('hidden');
-        // Scroll p/ baixo
-        const msgs = document.getElementById('chat-messages');
-        if(msgs) msgs.scrollTop = msgs.scrollHeight;
-    } else {
-        if(gradeBtn) gradeBtn.classList.add('active');
-        if(chatBtn) chatBtn.classList.remove('active');
-        if(gradeContent) gradeContent.classList.remove('hidden');
-        if(chatContent) chatContent.classList.add('hidden');
-    }
-};
-
-window.toggleMute = () => {
-    videoElement.muted = !videoElement.muted;
-    updateMuteIcon();
-};
-
-// NOVO: Função de Zoom
-window.toggleZoom = () => {
-    isVideoFitCover = !isVideoFitCover;
-    const zoomIcon = document.getElementById('zoom-icon');
-    
-    if (isVideoFitCover) {
-        videoElement.classList.add('video-cover');
-        videoElement.classList.remove('video-contain');
-        if(zoomIcon) zoomIcon.setAttribute('data-lucide', 'rectangle-horizontal'); 
-    } else {
-        videoElement.classList.add('video-contain');
-        videoElement.classList.remove('video-cover');
-        if(zoomIcon) zoomIcon.setAttribute('data-lucide', 'minimize');
-    }
-    lucide.createIcons();
-};
-
-window.toggleFullscreen = async () => {
-    const wrapper = document.getElementById('video-wrapper');
-    const video = document.getElementById('main-video');
-
-    if (!document.fullscreenElement) {
-        try {
-            if (wrapper.requestFullscreen) {
-                await wrapper.requestFullscreen();
-            } else if (video.webkitEnterFullscreen) {
-                video.webkitEnterFullscreen();
-                return; 
-            }
-            if (screen.orientation && screen.orientation.lock) {
-                await screen.orientation.lock('landscape').catch(e => {
-                    console.log('Orientação automática não suportada ou bloqueada pelo navegador:', e);
-                });
-            }
-        } catch (err) {
-            console.error("Erro ao entrar em tela cheia:", err);
-        }
-    } else {
-        try {
-            await document.exitFullscreen();
-            if (screen.orientation && screen.orientation.unlock) {
-                screen.orientation.unlock();
-            }
-        } catch (err) {
-            console.error("Erro ao sair da tela cheia:", err);
-        }
-    }
-};
-
-// 2. Data Listeners (TV Logic)
 function initListeners() {
-    // Sincronização imediata forçada pelo admin (Live Override)
+    // Grade de Horários
+    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'schedule'), (snap) => {
+        schedule = [];
+        const today = new Date().getDay(); // 0 = Domingo
+        
+        snap.forEach(d => {
+            const data = d.data();
+            if (data.day === undefined || parseInt(data.day) === today) {
+                schedule.push({id: d.id, ...data});
+            }
+        });
+        
+        schedule.sort((a,b) => a.time.localeCompare(b.time));
+        renderScheduleSidebar();
+        checkScheduleLoop();
+    });
+
+    // Chat Listener
+    initChat();
+
+    // Live Override Listener
     onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'stream', 'live'), (snap) => {
         const data = snap.data();
         if(data && data.isLive) {
-            // Se o timestamp for muito recente (menos de 5s), força play
             const now = Date.now();
-            if (now - data.startTime < 5000) {
+            // Só força se começou nos últimos 10 segundos
+            if (now - data.startTime < 10000) {
                  playProgram({
                      id: 'live_override',
                      title: data.title,
@@ -288,57 +169,22 @@ function initListeners() {
             }
         }
     });
-
-    // Global Settings
-    onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), (snap) => {
-        globalSettings = snap.data() || {};
-        const maint = document.getElementById('maintenance-screen');
-        if(globalSettings.maintenanceMode) {
-            maint.classList.remove('hidden');
-            document.getElementById('maintenance-message').innerText = globalSettings.maintenanceMessage;
-            videoElement.pause();
-        } else {
-            maint.classList.add('hidden');
-        }
-    });
-
-    // Schedule Data (Filtrando dia da semana para o Viewer)
-    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'schedule'), (snap) => {
-        schedule = [];
-        const today = new Date().getDay(); // 0 = Dom, 1 = Seg
-        
-        snap.forEach(d => {
-            const data = d.data();
-            // Se não tiver dia definido, assume hoje (legado) OU se for o dia de hoje
-            if (data.day === undefined || parseInt(data.day) === today) {
-                schedule.push({id: d.id, ...data});
-            }
-        });
-        
-        schedule.sort((a,b) => a.time.localeCompare(b.time));
-        renderScheduleSidebar();
-        checkScheduleLoop();
-    });
 }
 
-// 3. Auto-DJ Logic (The Brain)
 function checkScheduleLoop() {
     if(!auth.currentUser) return;
-    
+
     const now = new Date();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
     
-    // PRIORIDADE 1: Item marcado como ATIVO manualmente (Botão "No Ar" do Admin)
     let activeItem = schedule.find(item => item.active === true);
 
-    // PRIORIDADE 2: Item baseado no horário (Fallback Automático)
     if (!activeItem) {
         activeItem = schedule.find(item => {
             const [h, m] = item.time.split(':').map(Number);
             const startMinutes = h * 60 + m;
-            const duration = parseInt(item.duration) || 30; // default 30 min se não especificado
+            const duration = parseInt(item.duration) || 30;
             const endMinutes = startMinutes + duration;
-            
             return currentMinutes >= startMinutes && currentMinutes < endMinutes;
         });
     }
@@ -347,29 +193,24 @@ function checkScheduleLoop() {
         const [h, m] = activeItem.time.split(':').map(Number);
         const startTime = new Date();
         startTime.setHours(h, m, 0, 0);
-        
-        // Calcula tempo decorrido em segundos para sincronizar o vídeo
         const secondsSinceStart = (now - startTime) / 1000;
-
         playProgram(activeItem, secondsSinceStart);
     } else {
         goStandby();
     }
 }
 
-// 4. Player Logic
 function playProgram(item, targetTime) {
     if (!currentProgram || currentProgram.id !== item.id) {
-        console.log("Switching to:", item.title);
+        console.log("Mudando programa para:", item.title);
         currentProgram = item;
         
-        loadStream(item.url, targetTime);
+        // Atualiza UI
         updateUI(item);
+        loadStream(item.url, targetTime);
     } else {
         const drift = Math.abs(videoElement.currentTime - targetTime);
-        // Não sincronizar agressivamente se for stream infinito (duration 0)
-        // Aumentado threshold para 8s para evitar loops de sync
-        if (drift > 8 && item.duration > 0 && !videoElement.paused) { 
+        if (drift > 8 && item.duration > 0 && !videoElement.paused) {
             const syncBadge = document.getElementById('sync-status');
             syncBadge.classList.remove('hidden');
             videoElement.currentTime = targetTime;
@@ -378,86 +219,122 @@ function playProgram(item, targetTime) {
     }
 }
 
-function goStandby() {
-    if(currentProgram === null) return;
-    currentProgram = null;
-    videoElement.pause();
-    standbyScreen.classList.remove('hidden');
-    document.getElementById('live-indicator').classList.add('hidden');
-    document.getElementById('program-title').innerText = "Aguardando...";
-    document.getElementById('program-desc').innerText = "Fique ligado na programação.";
-    document.getElementById('program-category').innerText = "OFF AIR";
-}
-
 function loadStream(url, startTime) {
     standbyScreen.classList.add('hidden');
     let finalUrl = url;
-    
-    // Suporte a API Anivideo
-    if (url.includes('api.anivideo.net')) {
-        try {
-            const u = new URL(url);
-            if(u.searchParams.get('d')) finalUrl = u.searchParams.get('d');
-        } catch(e){}
+    if (url.includes('api.anivideo.net') && url.includes('?d=')) {
+        try { finalUrl = new URL(url).searchParams.get('d'); } catch(e){}
     }
 
-    const onReady = () => {
+    const startConfig = () => {
         videoElement.currentTime = startTime;
-        // Tentativa agressiva de tocar com som se desbloqueado
         videoElement.play().then(() => {
             updateMuteIcon();
         }).catch(e => {
-            console.warn("Autoplay bloqueado. Mutando.", e);
             videoElement.muted = true;
             videoElement.play();
+            updateMuteIcon();
         });
     };
 
-    if (Hls.isSupported() && (finalUrl.includes('.m3u8') || url.includes('.m3u8'))) {
+    if (Hls.isSupported() && (finalUrl.includes('.m3u8') || finalUrl.includes('m3u8'))) {
         if (hls) hls.destroy();
         hls = new Hls();
         hls.loadSource(finalUrl);
         hls.attachMedia(videoElement);
-        hls.on(Hls.Events.MANIFEST_PARSED, onReady);
+        hls.on(Hls.Events.MANIFEST_PARSED, startConfig);
     } else {
         videoElement.src = finalUrl;
-        videoElement.addEventListener('loadedmetadata', onReady, {once: true});
+        videoElement.addEventListener('loadedmetadata', startConfig, {once: true});
     }
 }
 
-// 5. UI Updates
+function goStandby() {
+    if (currentProgram === null) return;
+    currentProgram = null;
+    videoElement.pause();
+    standbyScreen.classList.remove('hidden');
+    document.getElementById('program-title').innerText = "...";
+}
+
+// ==========================================
+// 3. UI, CHAT & UTILS
+// ==========================================
+
+// Atualiza Poster, Título e Descrição
 function updateUI(item) {
     document.getElementById('program-title').innerText = item.title;
-    document.getElementById('program-desc').innerText = item.desc || 'Sem descrição.';
-    document.getElementById('program-category').innerText = item.category || 'PROGRAMA';
-    // Verifica se elemento existe antes de atualizar
-    const poster = document.getElementById('program-poster');
-    if(poster) poster.src = item.image || '';
+    document.getElementById('program-desc').innerText = item.desc || '';
+    document.getElementById('program-category').innerText = item.category || 'NO AR';
     
-    document.getElementById('live-indicator').classList.remove('hidden');
+    const poster = document.getElementById('program-poster');
+    if (poster) {
+        if (item.image) {
+            poster.src = item.image;
+            poster.classList.remove('hidden');
+        } else {
+            poster.classList.add('hidden');
+        }
+    }
+    
     renderScheduleSidebar();
 }
 
+// Chat Listener
+function initChat() {
+    const chatRef = collection(db, 'artifacts', appId, 'public', 'data', 'chat');
+    const q = query(chatRef, orderBy('timestamp', 'asc'), limit(50));
+    
+    onSnapshot(q, (snap) => {
+        const container = document.getElementById('chat-messages');
+        container.innerHTML = '';
+        snap.forEach(d => {
+            const msg = d.data();
+            const isMe = msg.uid === auth.currentUser.uid;
+            
+            const div = document.createElement('div');
+            div.className = `chat-msg ${isMe ? 'mine' : ''} flex flex-col`;
+            div.innerHTML = `
+                <div class="flex justify-between items-baseline mb-1">
+                    <span class="text-[10px] font-bold uppercase tracking-wide username-label ${isMe ? 'text-white' : 'text-violet-400'}">${msg.username}</span>
+                </div>
+                <div class="leading-snug break-words">${msg.text}</div>
+            `;
+            container.appendChild(div);
+        });
+        container.scrollTop = container.scrollHeight;
+    });
+}
+
+window.sendMessage = async (e) => {
+    e.preventDefault();
+    const input = document.getElementById('chat-input');
+    const text = input.value.trim();
+    if (!text || !currentUserData) return;
+    
+    input.value = '';
+    // No mobile, não focar automaticamente para não abrir o teclado sem querer
+    if(window.innerWidth > 768) input.focus();
+
+    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'chat'), {
+        text,
+        username: currentUserData.username,
+        uid: auth.currentUser.uid,
+        timestamp: serverTimestamp()
+    });
+};
+
 function renderScheduleSidebar() {
     const list = document.getElementById('schedule-list');
-    if(!list) return;
     list.innerHTML = '';
-    
-    // Atualiza o Label do dia da semana
     const days = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-    const today = new Date().getDay();
-    document.getElementById('schedule-day-label').innerText = days[today].toUpperCase();
-
-    if(schedule.length === 0) {
-        list.innerHTML = '<div class="text-zinc-500 text-xs text-center p-4">Grade vazia para hoje.</div>';
-        return;
-    }
+    document.getElementById('schedule-day-label').innerText = days[new Date().getDay()];
 
     schedule.forEach(item => {
-        const isActive = (currentProgram && currentProgram.id === item.id) || item.active;
-        const el = document.createElement('div');
-        el.className = `flex items-center gap-3 p-3 rounded-lg transition-all ${isActive ? 'active-program bg-white/5' : 'hover:bg-white/5 opacity-50 hover:opacity-100'}`;
-        el.innerHTML = `
+        const isActive = currentProgram && currentProgram.id === item.id;
+        const div = document.createElement('div');
+        div.className = `flex items-center gap-3 p-3 rounded-lg transition-all ${isActive ? 'active-program bg-white/5' : 'hover:bg-white/5 opacity-50 hover:opacity-100'}`;
+        div.innerHTML = `
             <div class="text-center w-12 shrink-0">
                 <div class="text-sm font-bold text-white font-mono">${item.time}</div>
                 ${isActive ? '<div class="text-[9px] text-violet-400 font-bold animate-pulse">NO AR</div>' : ''}
@@ -467,39 +344,67 @@ function renderScheduleSidebar() {
                 <div class="text-[10px] text-zinc-400 truncate">${item.category || 'Programa'}</div>
             </div>
         `;
-        list.appendChild(el);
+        list.appendChild(div);
     });
 }
 
-// 6. CHAT LOGIC
-function initChat() {
-    const chatRef = collection(db, 'artifacts', appId, 'public', 'data', 'chat');
-    const q = query(chatRef, orderBy('timestamp', 'asc'), limit(50));
+window.toggleMute = () => {
+    videoElement.muted = !videoElement.muted;
+    updateMuteIcon();
+};
+
+// ZOOM FIX: Alterna classes Tailwind diretamente
+window.toggleZoom = () => {
+    isVideoFitCover = !isVideoFitCover;
+    const zoomIcon = document.getElementById('zoom-icon');
     
-    onSnapshot(q, (snap) => {
-        const container = document.getElementById('chat-messages');
-        container.innerHTML = '';
-        snap.forEach(doc => {
-            const msg = doc.data();
-            const el = document.createElement('div');
-            const isMe = msg.uid === auth.currentUser.uid;
-            
-            el.className = `chat-msg ${isMe ? 'mine' : ''} flex flex-col`;
-            el.innerHTML = `
-                <div class="flex justify-between items-baseline mb-1">
-                    <span class="text-[10px] font-bold uppercase tracking-wide username-label ${isMe ? 'text-white' : 'text-violet-400'}">${msg.username}</span>
-                </div>
-                <div class="leading-snug break-words">${msg.text}</div>
-            `;
-            container.appendChild(el);
-        });
-        container.scrollTop = container.scrollHeight;
-    });
-}
+    if (isVideoFitCover) {
+        // Zoom: Preenche a tela (Cover)
+        videoElement.classList.add('object-cover');
+        videoElement.classList.remove('object-contain');
+        if(zoomIcon) zoomIcon.setAttribute('data-lucide', 'rectangle-horizontal'); 
+    } else {
+        // Fit: Ajusta à tela (Contain)
+        videoElement.classList.add('object-contain');
+        videoElement.classList.remove('object-cover');
+        if(zoomIcon) zoomIcon.setAttribute('data-lucide', 'minimize');
+    }
+    lucide.createIcons();
+};
+
+window.toggleFullscreen = () => {
+    const wrapper = document.getElementById('video-wrapper');
+    if (!document.fullscreenElement) {
+        wrapper.requestFullscreen().catch(err => console.log(err));
+    } else {
+        document.exitFullscreen();
+    }
+};
+
+window.switchSidebarTab = (tab) => {
+    const chatBtn = document.getElementById('tab-chat');
+    const gradeBtn = document.getElementById('tab-grade');
+    const chatContent = document.getElementById('content-chat');
+    const gradeContent = document.getElementById('content-grade');
+
+    if (tab === 'chat') {
+        chatBtn.classList.add('active');
+        gradeBtn.classList.remove('active');
+        chatContent.classList.remove('hidden');
+        gradeContent.classList.add('hidden');
+        const msgs = document.getElementById('chat-messages');
+        msgs.scrollTop = msgs.scrollHeight;
+    } else {
+        gradeBtn.classList.add('active');
+        chatBtn.classList.remove('active');
+        gradeContent.classList.remove('hidden');
+        chatContent.classList.add('hidden');
+    }
+};
 
 function updateMuteIcon() {
     const icon = document.getElementById('mute-icon');
-    if(videoElement.muted) {
+    if (videoElement.muted) {
         icon.setAttribute('data-lucide', 'volume-x');
         icon.classList.add('text-red-400');
     } else {
@@ -509,6 +414,7 @@ function updateMuteIcon() {
     lucide.createIcons();
 }
 
+// Atualiza a barra de progresso visualmente
 videoElement.addEventListener('timeupdate', () => {
     if(currentProgram) {
         const [h, m] = currentProgram.time.split(':').map(Number);
@@ -517,32 +423,10 @@ videoElement.addEventListener('timeupdate', () => {
         const elapsed = (new Date() - startTime) / 1000;
         const total = currentProgram.duration * 60;
         const pct = Math.min(100, Math.max(0, (elapsed / total) * 100));
-        const pbar = document.getElementById('progress-bar');
-        if(pbar) pbar.style.width = `${pct}%`;
+        const bar = document.getElementById('progress-bar');
+        if(bar) bar.style.width = `${pct}%`;
     }
 });
 
-setInterval(() => {
-    const d = new Date();
-    const clock = document.getElementById('clock');
-    if(clock) clock.innerText = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-}, 1000);
-
+// Init Icons
 lucide.createIcons();
-
-let timer;
-const controls = document.getElementById('video-controls');
-const container = document.getElementById('video-wrapper');
-if (container && controls) {
-    container.addEventListener('mousemove', () => {
-        controls.style.opacity = '1';
-        container.style.cursor = 'default';
-        clearTimeout(timer);
-        timer = setTimeout(() => {
-            if(!videoElement.paused) {
-                controls.style.opacity = '0';
-                container.style.cursor = 'none';
-            }
-        }, 3000);
-    });
-}
