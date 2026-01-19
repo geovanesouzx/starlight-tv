@@ -2,153 +2,134 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Starlight TV - Cyber Link</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Starlight TV - Liquid Glass</title>
     <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/128/705/705062.png">
     
-    <!-- Bibliotecas -->
+    <!-- Bibliotecas Externas -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Fonte nova para o visual Cyber -->
-    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Space+Grotesk:wght@300;400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 
-    <!-- CSS Separado -->
+    <!-- Link para o CSS separado -->
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-[#050505] text-white overflow-hidden h-screen w-screen selection:bg-cyan-500/30 font-sans">
+<body class="flex items-center justify-center p-4 h-screen bg-black">
 
     <!-- MANUTENÇÃO -->
-    <div id="maintenance-screen" class="fixed inset-0 z-[120] bg-black/95 flex flex-col items-center justify-center hidden backdrop-blur-sm">
-        <div class="border border-yellow-500/30 p-8 rounded-none bg-yellow-500/5 text-center relative overflow-hidden">
-            <div class="absolute top-0 left-0 w-full h-1 bg-yellow-500 animate-loading-bar"></div>
-            <i data-lucide="triangle-alert" class="w-12 h-12 text-yellow-500 mb-4 mx-auto"></i>
-            <h1 class="text-2xl font-bold text-yellow-500 tracking-widest uppercase mb-2">SYSTEM OFFLINE</h1>
-            <p id="maintenance-message" class="text-zinc-400 font-mono text-xs uppercase">Manutenção de rotina em andamento.</p>
-        </div>
+    <div id="maintenance-screen" class="fixed inset-0 z-[120] bg-black flex flex-col items-center justify-center hidden">
+        <i data-lucide="cone" class="w-16 h-16 text-yellow-500 mb-4"></i>
+        <h1 class="text-2xl font-bold text-white mb-2">EM MANUTENÇÃO</h1>
+        <p id="maintenance-message" class="text-zinc-500 font-mono text-sm">Voltamos em breve.</p>
     </div>
 
-    <!-- 1. LOGIN (NOVO DESIGN) -->
-    <div id="login-screen" class="fixed inset-0 z-[100] bg-[#020202] flex items-center justify-center p-6 transition-all duration-500 relative overflow-hidden">
-        <!-- Background Decor -->
-        <div class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none"></div>
-        <div class="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-cyan-600/10 blur-[100px] rounded-full"></div>
-        <div class="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-purple-600/10 blur-[100px] rounded-full"></div>
-
-        <div class="w-full max-w-md relative z-10 bg-zinc-900/50 backdrop-blur-xl border border-white/10 p-8 rounded-2xl shadow-2xl">
+    <!-- 1. TELA DE LOGIN -->
+    <div id="login-screen" class="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center transition-all duration-700">
+        <div class="w-full max-w-sm p-8">
             <div class="text-center mb-8">
-                <div class="inline-flex items-center justify-center w-16 h-16 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 mb-6 shadow-[0_0_20px_rgba(6,182,212,0.5)]">
-                    <i data-lucide="zap" class="w-8 h-8 text-white fill-white"></i>
+                <div class="w-16 h-16 bg-gradient-to-tr from-violet-600 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-2xl shadow-violet-500/30">
+                    <i data-lucide="zap" class="w-8 h-8 text-white fill-current"></i>
                 </div>
-                <h1 class="text-4xl font-bold text-white tracking-tighter mb-1 font-display">STARLIGHT<span class="text-cyan-400">.NET</span></h1>
-                <p class="text-zinc-500 text-xs tracking-widest uppercase">Secure Broadcast Terminal</p>
+                <h1 class="text-3xl font-bold text-white tracking-tight">Starlight <span class="text-violet-500">TV</span></h1>
+                <p class="text-zinc-500 text-sm">Entre para assistir</p>
             </div>
 
             <div class="space-y-4">
-                <div class="group">
-                    <label class="text-[10px] uppercase tracking-wider text-zinc-500 font-bold ml-1">Identificação</label>
-                    <input type="email" id="login-email" class="input-cyber" placeholder="usuario@email.com">
-                </div>
-                <div class="group">
-                    <label class="text-[10px] uppercase tracking-wider text-zinc-500 font-bold ml-1">Chave de Acesso</label>
-                    <input type="password" id="login-password" class="input-cyber" placeholder="••••••••">
-                </div>
+                <input type="email" id="login-email" class="input-auth" placeholder="Seu email">
+                <input type="password" id="login-password" class="input-auth" placeholder="Sua senha">
                 
-                <div class="grid grid-cols-2 gap-3 pt-2">
-                    <button id="btn-do-login" class="btn-cyber-primary">
-                        CONECTAR
-                    </button>
-                    <button id="btn-do-signup" class="btn-cyber-secondary">
-                        REGISTRAR
-                    </button>
-                </div>
+                <button id="btn-do-login" class="w-full py-3 bg-white text-black font-bold rounded-xl hover:scale-[1.02] transition shadow-lg shadow-white/10">
+                    ENTRAR
+                </button>
+                <button id="btn-do-signup" class="w-full py-3 bg-zinc-800 text-white font-bold rounded-xl hover:bg-zinc-700 transition">
+                    CRIAR CONTA
+                </button>
             </div>
-            <p id="login-error" class="text-red-400 text-xs mt-4 text-center border border-red-500/20 bg-red-500/10 py-2 rounded hidden font-mono"></p>
+            <p id="login-error" class="text-red-500 text-xs mt-4 text-center hidden"></p>
         </div>
     </div>
 
-    <!-- 2. USERNAME -->
-    <div id="username-screen" class="fixed inset-0 z-[110] bg-[#020202] flex flex-col items-center justify-center hidden p-6">
-        <div class="w-full max-w-sm text-center">
-            <h2 class="text-3xl font-bold text-white mb-2 font-display">IDENTIDADE</h2>
-            <p class="text-zinc-500 text-sm mb-8">Defina seu codinome na rede.</p>
+    <!-- 2. TELA DE USERNAME (SE NOVO USUÁRIO) -->
+    <div id="username-screen" class="fixed inset-0 z-[110] bg-black flex flex-col items-center justify-center hidden">
+        <div class="w-full max-w-sm p-8 text-center">
+            <h2 class="text-2xl font-bold text-white mb-2">Como devemos te chamar?</h2>
+            <p class="text-zinc-500 text-sm mb-6">Escolha um nome de usuário único para o chat.</p>
             
-            <input type="text" id="username-input" class="input-cyber text-center text-xl tracking-widest font-mono mb-4" placeholder="CODINOME">
-            <button id="btn-save-username" class="btn-cyber-primary w-full">
-                CONFIRMAR IDENTIDADE
+            <input type="text" id="username-input" class="input-auth text-center text-lg font-bold tracking-wide" placeholder="@usuario">
+            <button id="btn-save-username" class="w-full mt-4 py-3 bg-violet-600 text-white font-bold rounded-xl hover:bg-violet-500 transition shadow-lg shadow-violet-500/20">
+                CONFIRMAR
             </button>
-            <p id="username-error" class="text-red-500 text-xs mt-4 hidden font-mono"></p>
+            <p id="username-error" class="text-red-500 text-xs mt-4 hidden"></p>
         </div>
     </div>
 
-    <!-- 3. PERMISSÃO / INÍCIO -->
-    <div id="permission-screen" class="fixed inset-0 z-[90] bg-[#020202]/95 backdrop-blur-2xl flex flex-col items-center justify-center hidden p-6 text-center transition-all duration-500">
-        <div class="relative mb-8">
-            <div class="absolute inset-0 bg-cyan-500 blur-2xl opacity-20 rounded-full animate-pulse"></div>
-            <div class="w-20 h-20 border-2 border-cyan-500/50 rounded-full flex items-center justify-center relative z-10">
-                <i data-lucide="play" class="w-8 h-8 text-cyan-400 ml-1 fill-cyan-400"></i>
-            </div>
-        </div>
-        <h2 class="text-3xl font-bold text-white mb-2 font-display uppercase tracking-widest">Sincronizado</h2>
-        <p class="text-zinc-500 text-sm mb-8 max-w-xs mx-auto font-mono">Estabelecendo conexão segura com o stream.</p>
+    <!-- APP GRID -->
+    <div id="app-container" class="glass-panel w-full max-w-[1600px] h-[90vh] flex flex-col md:flex-row overflow-hidden relative z-10 opacity-0 transition-opacity duration-1000">
         
-        <button id="btn-permission-start" class="btn-cyber-primary px-8 py-3">
-            INICIAR TRANSMISSÃO
-        </button>
-    </div>
+        <!-- MAIN PLAYER AREA -->
+        <main class="flex-1 flex flex-col p-4 md:p-6 relative min-w-0">
+            <!-- Header -->
+            <header class="flex justify-between items-center mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 bg-violet-600 rounded-lg flex items-center justify-center">
+                        <i data-lucide="zap" class="w-4 h-4 text-white fill-current"></i>
+                    </div>
+                    <h1 class="text-xl font-bold tracking-wide">Starlight TV</h1>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div id="live-indicator" class="hidden px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-500 rounded-full text-xs font-bold flex items-center gap-2">
+                        <div class="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div> AO VIVO
+                    </div>
+                    <div class="font-mono text-zinc-400 text-sm bg-white/5 px-3 py-1 rounded-lg" id="clock">00:00</div>
+                    <button onclick="logout()" class="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition" title="Sair">
+                        <i data-lucide="log-out" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </header>
 
-    <!-- APP LAYOUT (NOVA ESTRUTURA) -->
-    <div id="app-container" class="w-full h-full flex flex-col md:flex-row relative z-10 opacity-0 transition-opacity duration-1000 bg-[#050505]">
-        
-        <!-- PLAYER AREA -->
-        <main class="flex-none w-full md:flex-1 bg-black relative flex flex-col justify-center video-area border-b md:border-b-0 md:border-r border-white/10">
-            <div id="video-wrapper" class="relative w-full aspect-video bg-black overflow-hidden shadow-2xl z-20 group">
-                <video id="main-video" class="absolute inset-0 w-full h-full object-contain" playsinline webkit-playsinline></video>
+            <!-- Video Player -->
+            <div id="video-wrapper" class="video-container group relative">
+                <video id="main-video" class="absolute inset-0 w-full h-full object-cover" playsinline></video>
                 
-                <!-- STANDBY -->
-                <div id="standby-screen" class="absolute inset-0 bg-black flex flex-col items-center justify-center z-10">
-                    <div class="w-full h-1 bg-zinc-800 absolute top-0 overflow-hidden">
-                        <div class="w-1/3 h-full bg-cyan-500 animate-loading-bar"></div>
+                <!-- Standby Screen (No Content) -->
+                <div id="standby-screen" class="absolute inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center z-10">
+                    <div class="relative w-24 h-24 mb-6 flex items-center justify-center pulse-circle">
+                        <i data-lucide="radio-tower" class="w-10 h-10 text-violet-500"></i>
                     </div>
-                    <h2 class="text-4xl font-bold text-zinc-800 uppercase tracking-tighter font-display select-none">OFF AIR</h2>
-                    <p class="text-zinc-600 text-xs font-mono mt-2 tracking-widest">AGUARDANDO SINAL...</p>
+                    <h2 class="text-2xl font-bold text-white mb-2">Aguardando Programação</h2>
+                    <p class="text-zinc-500 text-sm">O próximo programa começará no horário agendado.</p>
                 </div>
 
-                <!-- SYNC STATUS -->
-                <div id="sync-status" class="absolute top-4 left-4 bg-black/80 backdrop-blur border border-cyan-500/30 px-3 py-1 rounded text-[10px] font-bold text-cyan-400 hidden z-30 flex items-center gap-2">
-                    <div class="w-2 h-2 bg-cyan-500 rounded-full animate-ping"></div> SYNC...
+                <!-- Sync Overlay -->
+                <div id="sync-status" class="absolute top-4 left-4 bg-black/80 backdrop-blur px-3 py-1 rounded-lg text-xs font-bold text-emerald-400 hidden border border-emerald-500/30">
+                    <i data-lucide="refresh-cw" class="w-3 h-3 inline mr-1 animate-spin"></i> Sincronizando...
                 </div>
 
-                <!-- CONTROLS -->
-                <div id="video-controls" class="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-0 transition-opacity duration-300 flex flex-col justify-between p-4 z-20 pointer-events-none">
-                    <!-- Top Bar -->
-                    <div class="flex justify-between items-start pointer-events-auto">
-                        <div class="flex items-center gap-2 bg-red-500/10 backdrop-blur px-3 py-1 rounded border border-red-500/20">
-                            <div class="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div>
-                            <span class="text-[10px] font-bold text-red-500 tracking-widest font-mono">AO VIVO</span>
-                        </div>
-                        <button onclick="logout()" class="p-2 bg-black/50 text-zinc-400 hover:text-white rounded hover:bg-red-500/20 hover:border-red-500/50 border border-transparent transition backdrop-blur">
-                            <i data-lucide="power" class="w-4 h-4"></i>
-                        </button>
-                    </div>
-
-                    <!-- Bottom Bar -->
-                    <div class="pointer-events-auto">
-                        <div class="mb-4">
-                            <div class="text-[10px] font-bold text-cyan-400 mb-1 uppercase tracking-widest font-mono" id="program-category">CANAL</div>
-                            <h2 id="program-title" class="text-xl md:text-3xl font-bold text-white leading-none font-display uppercase">...</h2>
+                <!-- Controls Overlay -->
+                <div id="video-controls" class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-8 z-20">
+                    <div class="transform translate-y-4 group-hover:translate-y-0 transition duration-300">
+                        <div class="flex items-end gap-4 mb-4">
+                            <img id="program-poster" src="" class="w-16 h-24 object-cover rounded-lg shadow-lg hidden md:block bg-zinc-800">
+                            <div>
+                                <div class="text-xs font-bold text-violet-400 mb-1 uppercase tracking-wider" id="program-category">CANAL OFF</div>
+                                <h2 id="program-title" class="text-2xl md:text-4xl font-bold text-white drop-shadow-lg leading-tight">...</h2>
+                                <p id="program-desc" class="text-zinc-300 text-sm md:text-base mt-2 line-clamp-2 max-w-2xl">...</p>
+                            </div>
                         </div>
                         
-                        <div class="flex items-center gap-3">
-                            <button onclick="toggleMute()" class="w-10 h-10 rounded bg-white/5 hover:bg-white/10 border border-white/10 text-white backdrop-blur flex items-center justify-center transition">
+                        <div class="flex items-center gap-4 mt-6">
+                            <button onclick="toggleMute()" class="w-12 h-12 rounded-full bg-white/10 hover:bg-white text-white hover:text-black backdrop-blur-md flex items-center justify-center transition-all">
                                 <i id="mute-icon" data-lucide="volume-x" class="w-5 h-5"></i>
                             </button>
                             
-                            <div class="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
-                                <div id="progress-bar" class="h-full bg-cyan-500 w-0 relative shadow-[0_0_15px_rgba(6,182,212,0.8)]"></div>
+                            <div class="flex-1 h-1 bg-white/20 rounded-full overflow-hidden">
+                                <div id="progress-bar" class="h-full bg-violet-500 w-0 relative">
+                                    <div class="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 bg-white rounded-full shadow"></div>
+                                </div>
                             </div>
                             
-                            <button onclick="toggleFullscreen()" class="w-10 h-10 rounded bg-white/5 hover:bg-white/10 border border-white/10 text-white backdrop-blur flex items-center justify-center transition">
+                            <button onclick="toggleFullscreen()" class="w-12 h-12 rounded-full bg-white/10 hover:bg-white text-white hover:text-black backdrop-blur-md flex items-center justify-center transition-all">
                                 <i id="fullscreen-icon" data-lucide="maximize" class="w-5 h-5"></i>
                             </button>
                         </div>
@@ -157,48 +138,43 @@
             </div>
         </main>
 
-        <!-- SIDEBAR -->
-        <aside class="flex-1 flex flex-col min-h-0 bg-[#080808] md:w-96 relative z-10">
-            <!-- Tabs Header (Estilo Cyber) -->
-            <div class="flex bg-black/50 border-b border-white/5">
-                <button onclick="switchSidebarTab('chat')" id="tab-chat" class="tab-btn active">
-                    <span class="relative z-10">TERMINAL (CHAT)</span>
+        <!-- Sidebar (Schedule & Chat) -->
+        <aside class="w-full md:w-80 border-t md:border-t-0 md:border-l border-white/5 bg-black/20 backdrop-blur-3xl flex flex-col h-[40vh] md:h-auto">
+            <!-- Tabs -->
+            <div class="flex border-b border-white/5">
+                <button onclick="switchSidebarTab('grade')" id="tab-grade" class="tab-btn active">
+                    <i data-lucide="calendar" class="w-4 h-4 inline mr-1"></i> Grade
                 </button>
-                <button onclick="switchSidebarTab('grade')" id="tab-grade" class="tab-btn">
-                    <span class="relative z-10">DADOS (GRADE)</span>
+                <button onclick="switchSidebarTab('chat')" id="tab-chat" class="tab-btn">
+                    <i data-lucide="message-square" class="w-4 h-4 inline mr-1"></i> Chat
                 </button>
             </div>
             
-            <!-- CHAT -->
-            <div id="content-chat" class="flex-1 flex flex-col min-h-0 relative bg-[url('https://grainy-gradients.vercel.app/noise.svg')] bg-opacity-5">
-                <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-2 no-scrollbar scroll-smooth font-mono text-xs">
-                    <div class="text-center py-8 opacity-50">
-                        <i data-lucide="terminal" class="w-6 h-6 mx-auto mb-2 text-zinc-600"></i>
-                        <p class="text-zinc-600">Conexão segura estabelecida.</p>
-                    </div>
+            <!-- Schedule Content -->
+            <div id="content-grade" class="flex-1 overflow-y-auto p-4 space-y-2 no-scrollbar">
+                <div id="schedule-list"></div>
+                <div class="text-[10px] text-center text-zinc-600 mt-4">Starlight Broadcast System &copy; 2024</div>
+            </div>
+
+            <!-- Chat Content -->
+            <div id="content-chat" class="flex-1 flex flex-col hidden h-full overflow-hidden">
+                <div id="chat-messages" class="flex-1 overflow-y-auto p-4 no-scrollbar space-y-2">
+                    <!-- Messages injected here -->
+                    <div class="text-center text-zinc-600 text-xs mt-10">Bem-vindo ao chat ao vivo!</div>
                 </div>
-                
-                <div class="p-3 bg-[#050505] border-t border-white/10">
-                    <form onsubmit="sendMessage(event)" class="flex gap-2 items-center">
-                        <input id="chat-input" type="text" class="flex-1 bg-zinc-900/50 border border-white/10 rounded-none px-4 py-3 text-sm text-white focus:outline-none focus:border-cyan-500 transition placeholder-zinc-700 font-mono" placeholder="> Digite o comando..." autocomplete="off">
-                        <button type="submit" class="bg-cyan-600 hover:bg-cyan-500 text-white p-3 rounded-none transition border border-cyan-500">
+                <div class="p-3 border-t border-white/10 bg-black/20">
+                    <form onsubmit="sendMessage(event)" class="flex gap-2">
+                        <input id="chat-input" type="text" class="flex-1 bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-violet-500 transition" placeholder="Digite algo..." autocomplete="off">
+                        <button type="submit" class="bg-violet-600 hover:bg-violet-500 text-white p-2 rounded-lg transition">
                             <i data-lucide="send" class="w-4 h-4"></i>
                         </button>
                     </form>
                 </div>
             </div>
-
-            <!-- GRADE -->
-            <div id="content-grade" class="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar hidden bg-[#080808]">
-                <div id="schedule-list"></div>
-                <div class="text-[10px] text-center text-zinc-700 mt-8 pb-8 font-mono border-t border-white/5 pt-4">
-                    SERVER TIME: <span id="clock" class="text-cyan-600">00:00</span>
-                </div>
-            </div>
         </aside>
     </div>
 
-    <!-- JS Separado -->
+    <!-- Link para o JavaScript separado -->
     <script type="module" src="script.js"></script>
 </body>
 </html>

@@ -1,172 +1,98 @@
-/* Tema: Cyberpunk Minimalista */
-:root {
-    --bg: #050505;
-    --card: #0a0a0a;
-    --primary: #06b6d4; /* Cyan */
-    --secondary: #7c3aed; /* Violet */
-    --border: rgba(255,255,255,0.1);
-}
-
 body {
-    background-color: var(--bg);
-    font-family: 'Space Grotesk', sans-serif;
-}
-
-.font-display { font-family: 'Rajdhani', sans-serif; }
-.font-mono { font-family: 'Courier New', monospace; }
-
-/* Custom Scrollbar */
-.no-scrollbar::-webkit-scrollbar { display: none; }
-.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-/* Animações */
-@keyframes loading-bar {
-    0% { transform: translateX(-100%); }
-    50% { transform: translateX(0); }
-    100% { transform: translateX(100%); }
-}
-.animate-loading-bar { animation: loading-bar 2s infinite linear; }
-
-/* Inputs Cyber */
-.input-cyber {
-    background: rgba(255,255,255,0.03);
-    border: 1px solid var(--border);
+    font-family: 'Outfit', sans-serif;
+    background: linear-gradient(135deg, #09090b 0%, #18181b 100%);
     color: white;
-    padding: 14px;
-    border-radius: 4px;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* Glass Effect */
+.glass-panel {
+    background: rgba(20, 20, 20, 0.6);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+    border-radius: 24px;
+}
+
+.active-program { 
+    background: linear-gradient(90deg, rgba(139, 92, 246, 0.2) 0%, transparent 100%); 
+    border-left: 3px solid #8b5cf6; 
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Video Container */
+.video-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: black;
+    border-radius: 20px;
+    overflow: hidden;
+}
+
+video { width: 100%; height: 100%; object-fit: cover; }
+
+/* Loading/Standby Animations */
+@keyframes pulse-ring {
+    0% { transform: scale(0.8); opacity: 0.5; }
+    100% { transform: scale(2); opacity: 0; }
+}
+.pulse-circle::before {
+    content: '';
+    position: absolute;
+    left: -10px; top: -10px; right: -10px; bottom: -10px;
+    border-radius: 50%;
+    border: 2px solid #8b5cf6;
+    animation: pulse-ring 2s infinite;
+}
+
+.fake-fullscreen { position: fixed !important; top: 0; left: 0; width: 100vw !important; height: 100vh !important; z-index: 9999; background: black; border-radius: 0 !important; }
+.controls-hidden { opacity: 0 !important; pointer-events: none !important; }
+.hide-cursor { cursor: none; }
+
+/* Inputs Modernos */
+.input-auth {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    padding: 12px;
+    border-radius: 12px;
     width: 100%;
     outline: none;
-    font-size: 14px;
-    transition: 0.3s all;
-    font-family: 'Space Grotesk', sans-serif;
+    transition: 0.3s;
 }
-.input-cyber:focus {
-    border-color: var(--primary);
-    background: rgba(6, 182, 212, 0.05);
-    box-shadow: 0 0 15px rgba(6, 182, 212, 0.1);
-}
-
-/* Botões Cyber */
-.btn-cyber-primary {
-    background: var(--primary);
-    color: black;
-    font-weight: 700;
-    padding: 14px;
-    width: 100%;
-    border-radius: 4px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    font-family: 'Rajdhani', sans-serif;
-    transition: 0.2s;
-    border: 1px solid var(--primary);
-}
-.btn-cyber-primary:hover {
-    background: #22d3ee;
-    box-shadow: 0 0 20px rgba(6, 182, 212, 0.4);
-}
-.btn-cyber-primary:active { transform: scale(0.98); }
-
-.btn-cyber-secondary {
-    background: transparent;
-    color: white;
-    font-weight: 700;
-    padding: 14px;
-    width: 100%;
-    border-radius: 4px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    font-family: 'Rajdhani', sans-serif;
-    transition: 0.2s;
-    border: 1px solid var(--border);
-}
-.btn-cyber-secondary:hover {
-    background: white;
-    color: black;
+.input-auth:focus {
+    border-color: #8b5cf6;
+    background: rgba(255, 255, 255, 0.1);
 }
 
 /* Tabs */
 .tab-btn {
-    flex: 1;
-    padding: 16px;
-    font-size: 0.75rem;
-    font-weight: 700;
-    letter-spacing: 2px;
-    color: #52525b;
+    padding: 12px;
+    font-weight: 600;
+    color: #a1a1aa;
     border-bottom: 2px solid transparent;
-    transition: all 0.3s;
-    background: transparent;
-    font-family: 'Rajdhani', sans-serif;
-    position: relative;
-    overflow: hidden;
+    transition: 0.3s;
+    flex: 1;
+    text-align: center;
 }
 .tab-btn.active {
-    color: var(--primary);
-    background: linear-gradient(0deg, rgba(6,182,212,0.1) 0%, transparent 100%);
-    border-bottom-color: var(--primary);
+    color: white;
+    border-bottom-color: #8b5cf6;
 }
 
-/* Chat Messages Style */
+/* Chat Messages */
 .chat-msg {
-    background: rgba(255,255,255,0.03);
-    border-left: 2px solid var(--border);
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
     padding: 8px 12px;
-    margin-bottom: 6px;
-    width: fit-content;
-    max-width: 90%;
+    margin-bottom: 8px;
+    border: 1px solid rgba(255,255,255,0.05);
 }
 .chat-msg.mine {
-    background: rgba(6, 182, 212, 0.1);
-    border-left: none;
-    border-right: 2px solid var(--primary);
-    margin-left: auto;
-    text-align: right;
-}
-
-/* Grade Itens */
-.program-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px;
-    border: 1px solid transparent;
-    border-radius: 4px;
-    transition: 0.2s;
-    background: rgba(255,255,255,0.02);
-}
-.program-item.active {
-    background: rgba(6, 182, 212, 0.05);
-    border-color: rgba(6, 182, 212, 0.3);
-}
-
-/* Fullscreen Logic */
-:fullscreen #video-wrapper {
-    width: 100vw;
-    height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: black;
-}
-::backdrop { background: black; }
-
-/* Mobile Adaptations */
-@media (max-width: 768px) {
-    .video-area { flex: 0 0 auto; }
-    #video-wrapper {
-        width: 100vw;
-        height: 56.25vw;
-        max-height: 40vh;
-    }
-    :fullscreen #video-wrapper { height: 100vh; width: 100vw; }
-    
-    #program-title { font-size: 1.1rem; }
-    #video-controls { padding: 10px; }
-    
-    /* Input do chat fixo embaixo */
-    #content-chat { background: #000; }
-}
-
-@media (min-width: 769px) {
-    #video-wrapper { height: 100%; width: 100%; }
-    main { padding: 0; }
+    background: rgba(139, 92, 246, 0.1);
+    border-color: rgba(139, 92, 246, 0.2);
+    margin-left: 20px;
 }
