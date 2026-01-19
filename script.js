@@ -32,8 +32,16 @@ let globalSettings = {};
 let currentUserData = null;
 
 // ==========================================
-// 1. FLUXO DE AUTENTICAÇÃO
+// 1. FLUXO DE AUTENTICAÇÃO E AUDIO FIX
 // ==========================================
+
+// Função crítica: Desbloqueia o áudio aproveitando o clique do usuário
+function unlockAudio() {
+    videoElement.muted = false;
+    updateMuteIcon();
+    // Tenta iniciar um contexto de áudio ou tocar vazio para garantir permissão
+    videoElement.play().catch(() => {});
+}
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
@@ -41,13 +49,12 @@ onAuthStateChanged(auth, async (user) => {
         loginScreen.classList.add('opacity-0');
         setTimeout(() => loginScreen.classList.add('hidden'), 500);
 
-        // Checar se tem username
         const userRef = doc(db, 'artifacts', appId, 'users', user.uid);
         const userSnap = await getDoc(userRef);
 
         if (userSnap.exists() && userSnap.data().username) {
             currentUserData = userSnap.data();
-            enterApp(true); // Flag para indicar que o usuário já estava logado (refresh)
+            enterApp(true); // Flag true = já estava logado (refresh da página)
         } else {
             usernameScreen.classList.remove('hidden');
         }
@@ -58,13 +65,12 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// Entrar no app e forçar unmuting
+// Entrar no app
 function enterApp(isAutoLogin = false) {
     usernameScreen.classList.add('hidden');
     appContainer.style.opacity = '1';
-    console.log("Entrou como:", currentUserData?.username);
-
-    // AUDIO FIX: Se não for login automático (foi clique), desbloqueia o áudio
+    
+    // Se NÃO for login automático (foi interação manual agora), desbloqueia o áudio
     if (!isAutoLogin) {
         unlockAudio();
     }
@@ -74,16 +80,9 @@ function enterApp(isAutoLogin = false) {
     checkScheduleLoop();
 }
 
-function unlockAudio() {
-    videoElement.muted = false;
-    updateMuteIcon();
-    // Tenta iniciar um contexto de áudio ou tocar vazio para garantir permissão
-    videoElement.play().catch(() => {});
-}
-
 // Login Actions - Unmute ao clicar
 document.getElementById('btn-do-login').addEventListener('click', () => {
-    unlockAudio(); // Critical for Safari/Chrome autoplay policy
+    unlockAudio(); // Critical for autoplay policy
     const e = document.getElementById('login-email').value;
     const p = document.getElementById('login-password').value;
     if(!e || !p) return;
@@ -162,6 +161,7 @@ document.getElementById('btn-save-username').addEventListener('click', async () 
     }
 });
 
+// Funções Globais
 window.logout = () => signOut(auth).then(() => location.reload());
 
 window.sendMessage = async (e) => {
@@ -237,14 +237,13 @@ window.toggleFullscreen = async () => {
 
 // 2. Data Listeners (TV Logic)
 function initListeners() {
-    // Live Stream Override (Sincronização imediata forçada pelo admin)
+    // Sincronização imediata forçada pelo admin (Live Override)
     onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'stream', 'live'), (snap) => {
         const data = snap.data();
         if(data && data.isLive) {
-            // Se o timestamp for muito recente (menos de 3s), força play
+            // Se o timestamp for muito recente (menos de 5s), força play
             const now = Date.now();
             if (now - data.startTime < 5000) {
-                 // Forçar troca imediata
                  playProgram({
                      id: 'live_override',
                      title: data.title,
@@ -271,20 +270,19 @@ function initListeners() {
         }
     });
 
-    // Schedule Data (Filtrando dia da semana no front, ou pode ser na query)
+    // Schedule Data (Filtrando dia da semana para o Viewer)
     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'schedule'), (snap) => {
         schedule = [];
         const today = new Date().getDay(); // 0 = Dom, 1 = Seg
         
         snap.forEach(d => {
             const data = d.data();
-            // Se não tiver dia definido, assume todos os dias (legado) OU se for o dia de hoje
+            // Se não tiver dia definido, assume hoje (legado) OU se for o dia de hoje
             if (data.day === undefined || parseInt(data.day) === today) {
                 schedule.push({id: d.id, ...data});
             }
         });
         
-        // Sort by HH:MM
         schedule.sort((a,b) => a.time.localeCompare(b.time));
         renderScheduleSidebar();
         checkScheduleLoop();
@@ -298,7 +296,7 @@ function checkScheduleLoop() {
     const now = new Date();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
     
-    // PRIORIDADE 1: Item marcado como ATIVO manualmente (Botão "No Ar")
+    // PRIORIDADE 1: Item marcado como ATIVO manualmente (Botão "No Ar" do Admin)
     let activeItem = schedule.find(item => item.active === true);
 
     // PRIORIDADE 2: Item baseado no horário (Fallback Automático)
@@ -333,7 +331,8 @@ function playProgram(item, targetTime) {
         updateUI(item);
     } else {
         const drift = Math.abs(videoElement.currentTime - targetTime);
-        if (drift > 5 && item.duration > 0) { // Não sincronizar se for stream infinito (duration 0)
+        // Não sincronizar agressivamente se for stream infinito (duration 0)
+        if (drift > 5 && item.duration > 0) { 
             const syncBadge = document.getElementById('sync-status');
             syncBadge.classList.remove('hidden');
             videoElement.currentTime = targetTime;
@@ -357,6 +356,7 @@ function loadStream(url, startTime) {
     standbyScreen.classList.add('hidden');
     let finalUrl = url;
     
+    // Suporte a API Anivideo
     if (url.includes('api.anivideo.net')) {
         try {
             const u = new URL(url);
@@ -402,7 +402,7 @@ function renderScheduleSidebar() {
     const list = document.getElementById('schedule-list');
     list.innerHTML = '';
     
-    // Mostra o dia da semana
+    // Atualiza o Label do dia da semana
     const days = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
     const today = new Date().getDay();
     document.getElementById('schedule-day-label').innerText = days[today].toUpperCase();
