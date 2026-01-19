@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Starlight TV - Liquid Glass</title>
+    <title>Starlight TV - Ao Vivo</title>
     <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/128/705/705062.png">
     
     <!-- Bibliotecas Externas -->
@@ -215,13 +215,11 @@
     </div>
 
     <!-- TELA DE LOGIN (MODAL DE VIDRO) -->
-    <!-- FIX: Removido style="touch-action: none" para permitir scroll/interação mobile -->
     <div id="login-screen" class="fixed inset-0 z-[100] flex flex-col items-center justify-center p-4 transition-all duration-700 bg-black/80">
         <div class="absolute inset-0 bg-black/60 backdrop-blur-md"></div>
         
         <div class="relative w-full max-w-md glass-panel rounded-3xl p-8 md:p-10 scale-in shadow-2xl z-10">
             <div class="text-center mb-8">
-                <!-- LOGO MODIFICADA (SEM FUNDO E MAIOR) -->
                 <div class="flex justify-center mb-6">
                     <img src="https://cdn-icons-png.flaticon.com/128/705/705062.png" class="w-32 h-32 object-contain drop-shadow-[0_0_30px_rgba(139,92,246,0.5)] hover:scale-110 transition-transform duration-500" alt="Logo">
                 </div>
@@ -480,7 +478,7 @@
         </aside>
     </div>
 
-    <!-- Importando o JS separado (module type é crucial) -->
+    <!-- Importando o JS separado -->
     <script type="module" src="script.js"></script>
 </body>
 </html>

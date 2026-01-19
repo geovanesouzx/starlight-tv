@@ -36,7 +36,7 @@ const appContainer = document.getElementById('app-container');
 
 // Estado
 let schedule = [];
-let currentProgram = null;
+let currentProgramId = null; // ID do programa atual para evitar reloads
 let hls = null;
 let globalSettings = {};
 let currentUserData = null;
@@ -46,6 +46,7 @@ let replyingTo = null; // Stores message object being replied to
 let longPressTimer = null;
 let pendingDeleteId = null;
 let localTickerEnabled = localStorage.getItem('local_ticker_enabled') !== 'false';
+let manualLiveStream = null; // Para guardar o estado de live manual
 
 // ==========================================
 // 0. UI HELPERS (Settings, Themes, Modals)
@@ -310,19 +311,28 @@ window.performLogout = () => {
     });
 };
 
-// PRESENCE SYSTEM
-function updatePresence(user) {
-    if(!user) return;
-    const presenceRef = doc(db, 'artifacts', appId, 'presence', user.uid);
-    
-    // Set online
-    setDoc(presenceRef, {
-        uid: user.uid,
-        timestamp: serverTimestamp()
-    });
+// PRESENCE SYSTEM COM HEARTBEAT (Contagem Real)
+let heartbeatInterval;
 
-    // Clean up on disconnect/close
+function startPresenceHeartbeat(user) {
+    if(!user) return;
+    
+    // Função para atualizar o timestamp
+    const pulse = () => {
+        const presenceRef = doc(db, 'artifacts', appId, 'presence', user.uid);
+        setDoc(presenceRef, {
+            uid: user.uid,
+            timestamp: serverTimestamp() // Importante: usa hora do servidor
+        });
+    };
+
+    pulse(); // Primeiro pulso
+    // Atualiza a cada 60 segundos
+    heartbeatInterval = setInterval(pulse, 60000); 
+
+    // Limpeza ao fechar
     window.addEventListener('beforeunload', () => {
+        const presenceRef = doc(db, 'artifacts', appId, 'presence', user.uid);
         deleteDoc(presenceRef);
     });
 }
@@ -343,7 +353,7 @@ onAuthStateChanged(auth, async (user) => {
             return;
         }
 
-        updatePresence(user);
+        startPresenceHeartbeat(user);
 
         loginScreen.classList.add('opacity-0', 'scale-110', 'pointer-events-none');
         setTimeout(() => loginScreen.classList.add('hidden'), 700);
@@ -358,6 +368,7 @@ onAuthStateChanged(auth, async (user) => {
             usernameScreen.classList.remove('hidden');
         }
     } else {
+        clearInterval(heartbeatInterval);
         loginScreen.classList.remove('hidden', 'opacity-0', 'scale-110', 'pointer-events-none');
         appContainer.style.opacity = '0';
     }
@@ -371,8 +382,10 @@ function enterApp(isAutoLogin = false) {
     
     initListeners();
     initChat();
-    checkScheduleLoop();
-    setInterval(checkScheduleLoop, 1000);
+    
+    // Inicia o loop mestre de sincronização
+    setInterval(masterSyncLoop, 1000);
+    masterSyncLoop(); // Chama imediatamente
 }
 
 // Add touchstart to avoid delay on mobile
@@ -396,7 +409,6 @@ const handleLogin = (e) => {
     });
 };
 
-// FIX MOBILE: Removed 'touchend' to prevent conflicts/ghost clicks on mobile
 btnLogin.addEventListener('click', handleLogin);
 
 document.getElementById('btn-do-signup').addEventListener('click', () => {
@@ -806,28 +818,27 @@ videoElement.addEventListener('play', () => {
 
 // 2. Data Listeners
 function initListeners() {
-    // Listen for Live Viewers Count (Based on presence)
+    // Listen for Real Presence (With Filtering)
     onSnapshot(collection(db, 'artifacts', appId, 'presence'), (snap) => {
-        const count = snap.size;
-        document.getElementById('viewer-number').innerText = count;
+        let realCount = 0;
+        const now = Date.now();
+        // Filtra usuários que atualizaram o status nos últimos 2 minutos
+        snap.forEach(doc => {
+            const data = doc.data();
+            if(data.timestamp) {
+                // Converte Timestamp do Firestore para millis
+                const lastSeen = data.timestamp.toMillis ? data.timestamp.toMillis() : 0;
+                if(now - lastSeen < 120000) { // 2 minutos tolerância
+                    realCount++;
+                }
+            }
+        });
+        document.getElementById('viewer-number').innerText = realCount;
     });
 
     onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'stream', 'live'), (snap) => {
         const data = snap.data();
-        if(data && data.isLive) {
-            const now = Date.now();
-            if (now - data.startTime < 5000) {
-                    playProgram({
-                        id: 'live_override',
-                        title: data.title,
-                        desc: data.desc,
-                        url: data.url,
-                        image: data.image,
-                        category: 'AO VIVO',
-                        duration: 0
-                    }, 0);
-            }
-        }
+        manualLiveStream = data; // Guarda estado global
     });
 
     onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), (snap) => {
@@ -848,21 +859,19 @@ function initListeners() {
         } else {
             reactionsContainer.classList.remove('active');
         }
-        // Ticker logic is handled in checkScheduleLoop now
     });
 
     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'schedule'), (snap) => {
         schedule = [];
-        const today = new Date().getDay();
+        // Carrega TODA a grade para lógica de transição, mas a UI foca no dia atual
         snap.forEach(d => {
-            const data = d.data();
-            if (data.day === undefined || parseInt(data.day) === today) {
-                schedule.push({id: d.id, ...data});
-            }
+            schedule.push({id: d.id, ...d.data()});
         });
+        // Ordena por horário
         schedule.sort((a,b) => a.time.localeCompare(b.time));
+        
         renderScheduleSidebar();
-        checkScheduleLoop();
+        // O loop mestre cuidará da atualização
     });
 
     // NEW: TICKER LISTENER (Manual text)
@@ -926,8 +935,6 @@ function initListeners() {
 // --- POLL VOTING ---
 window.castVote = async (index) => {
     const pollRef = doc(db, 'artifacts', appId, 'public', 'data', 'widgets', 'poll');
-    // Optimistic UI update not needed due to fast listener
-    // Check LS
     const pollSnap = await getDoc(pollRef);
     if(!pollSnap.exists()) return;
     
@@ -935,7 +942,6 @@ window.castVote = async (index) => {
 
     localStorage.setItem(`poll_voted_${pollSnap.id}`, index);
     
-    // Use update with dot notation for nested map field
     await updateDoc(pollRef, {
         [`votes.${index}`]: increment(1)
     });
@@ -945,13 +951,11 @@ window.castVote = async (index) => {
 window.sendReaction = async (emoji) => {
     createFloatingReaction(emoji);
     
-    // Send to server
     try {
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'widgets', 'reactions'), {
             count: increment(1)
         });
     } catch(e) {
-        // If doc doesn't exist create it
             await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'widgets', 'reactions'), {
             count: 1
         });
@@ -967,43 +971,90 @@ function createFloatingReaction(emoji) {
     setTimeout(() => el.remove(), 3000);
 }
 
-// 3. Auto-DJ Logic & Ticker
-function checkScheduleLoop() {
-    if(!auth.currentUser) return;
-    const now = new Date();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-    let activeItem = schedule.find(item => item.active === true);
+// ==========================================
+// 3. MASTER SYNC LOOP (O Coração da TV)
+// ==========================================
 
-    // Find scheduled item
-    if (!activeItem) {
-        activeItem = schedule.find(item => {
-            const [h, m] = item.time.split(':').map(Number);
-            const startMinutes = h * 60 + m;
-            const duration = parseInt(item.duration) || 30;
-            const endMinutes = startMinutes + duration;
-            return currentMinutes >= startMinutes && currentMinutes < endMinutes;
-        });
+function masterSyncLoop() {
+    if(!auth.currentUser) return;
+    
+    // 1. Prioridade Absoluta: Transmissão Manual (Live Override)
+    if(manualLiveStream && manualLiveStream.isLive) {
+        // Se mudou para live manual agora, troca
+        if(currentProgramId !== 'manual_live') {
+            currentProgramId = 'manual_live';
+            playProgram({
+                title: manualLiveStream.title,
+                desc: manualLiveStream.desc,
+                category: 'AO VIVO',
+                url: manualLiveStream.url,
+                image: manualLiveStream.image,
+                duration: 0 // Live não tem duração fixa de grade
+            }, 0); // Começa do inicio (ou live edge)
+        }
+        return; // Não processa grade automática
     }
 
+    // 2. Grade Automática baseada no horário do servidor (usando hora local confiável)
+    const now = new Date();
+    const currentDay = now.getDay(); // 0-6
+    const currentTotalMinutes = now.getHours() * 60 + now.getMinutes();
+    
+    // Encontra o programa que DEVERIA estar passando agora
+    // Logica: StartTime <= Agora < StartTime + Duracao
+    const activeItem = schedule.find(item => {
+        if (parseInt(item.day) !== currentDay) return false;
+        
+        const [h, m] = item.time.split(':').map(Number);
+        const startMins = h * 60 + m;
+        const duration = parseInt(item.duration) || 30;
+        const endMins = startMins + duration;
+        
+        return currentTotalMinutes >= startMins && currentTotalMinutes < endMins;
+    });
+
     if (activeItem) {
+        // Calcular em que ponto do vídeo devemos estar (seek)
         const [h, m] = activeItem.time.split(':').map(Number);
         const startTime = new Date();
         startTime.setHours(h, m, 0, 0);
-        const secondsSinceStart = (now - startTime) / 1000;
-        playProgram(activeItem, secondsSinceStart);
+        
+        // Quantos segundos já passaram desde o inicio do programa
+        const secondsSinceStart = (now.getTime() - startTime.getTime()) / 1000;
+
+        // Se mudou o programa, carrega o novo
+        if (currentProgramId !== activeItem.id) {
+            currentProgramId = activeItem.id;
+            playProgram(activeItem, secondsSinceStart);
+        } else {
+            // Se é o mesmo programa, verifica se des-sincronizou muito (> 5s)
+            // Apenas para videos estáticos, não HLS live
+            if (!videoElement.paused && Math.abs(videoElement.currentTime - secondsSinceStart) > 8) {
+                // Sincronização forçada
+                const syncBadge = document.getElementById('sync-status');
+                syncBadge.classList.remove('hidden');
+                videoElement.currentTime = secondsSinceStart;
+                setTimeout(() => syncBadge.classList.add('hidden'), 2000);
+            }
+        }
+        
+        updateUI(activeItem);
     } else {
-        goStandby();
+        // Nada na grade agora
+        if(currentProgramId !== 'standby') {
+            goStandby();
+            currentProgramId = 'standby';
+        }
     }
 
-    // --- TICKER LOGIC (Running every loop) ---
-    updateTickerLogic(currentMinutes);
+    // Ticker Logic update
+    updateTickerLogic(currentTotalMinutes);
 }
 
-let tickerTimer = null;
-
 function updateTickerLogic(currentMinutes) {
-    // Find next program
+    // Procura o próximo programa na grade de hoje
     const nextItem = schedule.find(item => {
+        if(parseInt(item.day) !== new Date().getDay()) return false;
         const [h, m] = item.time.split(':').map(Number);
         const startMinutes = h * 60 + m;
         return startMinutes > currentMinutes;
@@ -1013,32 +1064,31 @@ function updateTickerLogic(currentMinutes) {
     const tickerText = document.getElementById('ticker-text');
     const tickerBadge = document.getElementById('ticker-badge');
 
-    // Admin manual override or auto mode
     let showTicker = false;
     let message = "";
     let badge = "INFO";
 
     if (localTickerEnabled) {
             if (globalSettings.tickerAuto === false && globalSettings.manualTicker) {
-            // Manual Mode
-            showTicker = true;
-            message = globalSettings.manualTicker;
-            badge = "NEWS";
-            } else if (nextItem) {
-            // Auto Mode
-            const [h, m] = nextItem.time.split(':').map(Number);
-            const startMinutes = h * 60 + m;
-            const diff = startMinutes - currentMinutes;
-
-            if (diff <= 5 && diff > 0) {
+                // Manual Mode
                 showTicker = true;
-                message = `${nextItem.title} começa em ${diff} min`;
-                badge = "EM BREVE";
-            } else if (diff <= 1) {
+                message = globalSettings.manualTicker;
+                badge = "NEWS";
+            } else if (nextItem) {
+                // Auto Mode
+                const [h, m] = nextItem.time.split(':').map(Number);
+                const startMinutes = h * 60 + m;
+                const diff = startMinutes - currentMinutes;
+
+                if (diff <= 5 && diff > 0) {
+                    showTicker = true;
+                    message = `${nextItem.title} começa em ${diff} min`;
+                    badge = "EM BREVE";
+                } else if (diff <= 1) {
                     showTicker = true;
                     message = `A SEGUIR: ${nextItem.title}`;
                     badge = "A SEGUIR";
-            }
+                }
             }
     }
 
@@ -1058,25 +1108,17 @@ function updateTickerVisibility() {
 
 
 // 4. Player Logic
-function playProgram(item, targetTime) {
-    if (!currentProgram || currentProgram.id !== item.id) {
-        currentProgram = item;
-        loadStream(item.url, targetTime);
-        updateUI(item);
-    } else {
-        const drift = Math.abs(videoElement.currentTime - targetTime);
-        if (drift > 8 && item.duration > 0 && !videoElement.paused) { 
-            const syncBadge = document.getElementById('sync-status');
-            syncBadge.classList.remove('hidden');
-            videoElement.currentTime = targetTime;
-            setTimeout(() => syncBadge.classList.add('hidden'), 2000);
-        }
-    }
+function playProgram(item, startTimeOffset) {
+    loadStream(item.url, startTimeOffset);
+    // UI Updates
+    document.getElementById('program-title').innerText = item.title;
+    document.getElementById('program-desc').innerText = item.desc || 'Sem descrição.';
+    document.getElementById('program-category').innerText = item.category || 'NO AR';
+    document.getElementById('live-indicator').classList.remove('hidden');
+    renderScheduleSidebar();
 }
 
 function goStandby() {
-    if(currentProgram === null) return;
-    currentProgram = null;
     videoElement.pause();
     standbyScreen.classList.remove('hidden');
     document.getElementById('live-indicator').classList.add('hidden');
@@ -1088,6 +1130,8 @@ function goStandby() {
 function loadStream(url, startTime) {
     standbyScreen.classList.add('hidden');
     let finalUrl = url;
+    
+    // Tratamento básico de URLs
     if (url.includes('api.anivideo.net')) {
         try {
             const u = new URL(url);
@@ -1096,10 +1140,17 @@ function loadStream(url, startTime) {
     }
 
     const onReady = () => {
-        videoElement.currentTime = startTime;
+        // Se for HLS Live, o startTime geralmente é ignorado ou tratado diferente
+        // Se for arquivo estático (mp4), pulamos para o ponto certo
+        if(startTime > 0 && finalUrl.includes('.mp4')) {
+             videoElement.currentTime = startTime;
+        }
+        
         videoElement.play().then(() => updateMuteIcon()).catch(() => {
+            // Autoplay bloqueado? Muta e tenta de novo
             videoElement.muted = true;
             videoElement.play();
+            updateMuteIcon();
         });
     };
 
@@ -1111,17 +1162,18 @@ function loadStream(url, startTime) {
         hls.on(Hls.Events.MANIFEST_PARSED, onReady);
     } else {
         videoElement.src = finalUrl;
-        videoElement.addEventListener('loadedmetadata', onReady, {once: true});
+        // Se for arquivo normal, seek imediatamente ao carregar metadados
+        videoElement.onloadedmetadata = () => {
+             if(startTime > 0) videoElement.currentTime = startTime;
+             onReady();
+        };
     }
 }
 
-// 5. UI Updates
+// 5. UI Updates & Modal Logic
 function updateUI(item) {
+    // Isso já é chamado dentro do playProgram, mas se precisar forçar update visual:
     document.getElementById('program-title').innerText = item.title;
-    document.getElementById('program-desc').innerText = item.desc || 'Sem descrição.';
-    document.getElementById('program-category').innerText = item.category || 'NO AR';
-    document.getElementById('live-indicator').classList.remove('hidden');
-    renderScheduleSidebar();
 }
 
 // PROGRAM MODAL LOGIC
@@ -1152,13 +1204,17 @@ function renderScheduleSidebar() {
     const today = new Date().getDay();
     document.getElementById('schedule-day-label').innerText = days[today].toUpperCase();
 
-    if(schedule.length === 0) {
+    // Filtra apenas o dia de hoje para mostrar na sidebar
+    const todaysItems = schedule.filter(i => parseInt(i.day) === today);
+
+    if(todaysItems.length === 0) {
         list.innerHTML = '<div class="text-zinc-500 text-xs text-center p-8 border border-white/5 rounded-xl border-dashed">Grade vazia hoje.</div>';
         return;
     }
 
-    schedule.forEach(item => {
-        const isActive = (currentProgram && currentProgram.id === item.id) || item.active;
+    todaysItems.forEach(item => {
+        // Verifica se é o programa atual
+        const isActive = (currentProgramId === item.id);
         const el = document.createElement('div');
         el.onclick = () => window.openProgramDetails(item.id);
         el.className = `flex items-center gap-4 p-3 rounded-2xl transition-all border border-transparent cursor-pointer group ${isActive ? 'active-program-card shadow-lg' : 'hover:bg-white/5 opacity-60 hover:opacity-100 hover:border-white/5'}`;
@@ -1178,7 +1234,7 @@ function renderScheduleSidebar() {
     lucide.createIcons();
 }
 
-// 6. CHAT LOGIC
+// 6. CHAT LOGIC (Initial load)
 function initChat() {
     const chatRef = collection(db, 'artifacts', appId, 'public', 'data', 'chat');
     const q = query(chatRef, orderBy('timestamp', 'asc'), limit(50));
@@ -1193,9 +1249,8 @@ function initChat() {
             const el = document.createElement('div');
             const isMe = msg.uid === auth.currentUser.uid;
             
-            el.className = `flex flex-col mb-2 ${isMe ? 'items-end' : 'items-start'} fade-in-up group/msg relative transition-transform duration-200 ease-out`; // Add transition class for smooth swipe
+            el.className = `flex flex-col mb-2 ${isMe ? 'items-end' : 'items-start'} fade-in-up group/msg relative transition-transform duration-200 ease-out`; 
             
-            // Attach Touch Listeners here!
             addTouchListeners(el, { id: msgId, username: msg.username, text: msg.text, type: msg.type, isMe: isMe });
 
             // Avatar Rendering Logic
@@ -1225,16 +1280,13 @@ function initChat() {
                 bubbleClass = isMe ? 'mine text-white' : 'other text-zinc-200';
             }
             
-            // Actions Logic (Desktop Hover)
             let actionsHtml = '';
-            // Reply Button (Everyone)
             actionsHtml += `
                     <div class="action-btn" onclick="prepareReply('${msgId}', '${msg.username}', '${msg.type === 'gif' ? msg.text : msg.text.replace(/'/g, "\\'")}', '${msg.type}')" title="Responder">
                     <i data-lucide="reply" class="w-3 h-3"></i>
                     </div>
             `;
             
-            // Delete Button (Only Me)
             if (isMe) {
                 actionsHtml += `
                         <div class="action-btn hover:bg-red-500 hover:border-red-500" onclick="deleteMessage('${msgId}')" title="Apagar">
@@ -1243,7 +1295,6 @@ function initChat() {
                 `;
             }
 
-            // Mobile Swipe Hint (Hidden by default, shown by JS logic)
             const swipeHint = `<div class="swipe-hint"><i data-lucide="reply" class="w-4 h-4"></i></div>`;
 
             el.innerHTML = `
@@ -1282,13 +1333,9 @@ function updateMuteIcon() {
 }
 
 videoElement.addEventListener('timeupdate', () => {
-    if(currentProgram) {
-        const [h, m] = currentProgram.time.split(':').map(Number);
-        const startTime = new Date(); 
-        startTime.setHours(h, m, 0, 0);
-        const elapsed = (new Date() - startTime) / 1000;
-        const total = currentProgram.duration * 60;
-        const pct = Math.min(100, Math.max(0, (elapsed / total) * 100));
+    // Atualiza barra de progresso visual (apenas se tiver duração finita)
+    if(videoElement.duration && videoElement.duration !== Infinity) {
+        const pct = (videoElement.currentTime / videoElement.duration) * 100;
         const pbar = document.getElementById('progress-bar');
         if(pbar) pbar.style.width = `${pct}%`;
     }
