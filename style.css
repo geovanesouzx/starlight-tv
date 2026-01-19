@@ -23,6 +23,15 @@ body.light-mode {
     --toast-bg: #ffffff;
 }
 
+/* Reset Básico */
+body {
+    font-family: 'Outfit', sans-serif;
+    min-height: 100dvh;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    transition: background-color 0.3s, color 0.3s;
+}
+
 /* Glass Effect Desktop */
 @media (min-width: 768px) {
     .glass-panel {
@@ -34,17 +43,15 @@ body.light-mode {
     }
 }
 
-.active-program { 
-    background: linear-gradient(90deg, rgba(139, 92, 246, 0.15) 0%, transparent 100%); 
-    border-left: 2px solid #8b5cf6; 
-}
-
+/* Scrollbars Ocultas mas funcionais */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
+/* Utilitários de Vídeo */
 video.force-cover { object-fit: cover !important; }
 video.force-contain { object-fit: contain !important; }
 
+/* Animações e Efeitos */
 @keyframes pulse-ring {
     0% { transform: scale(0.8); opacity: 0.5; }
     100% { transform: scale(2); opacity: 0; }
@@ -58,6 +65,7 @@ video.force-contain { object-fit: contain !important; }
     animation: pulse-ring 2s infinite;
 }
 
+/* Inputs Unificados */
 .input-auth, .input-settings {
     background: var(--input-bg);
     border: 1px solid var(--border-color);
@@ -77,6 +85,7 @@ video.force-contain { object-fit: contain !important; }
     color: var(--text-secondary);
 }
 
+/* Abas */
 .tab-btn {
     padding: 14px;
     font-weight: 600;
@@ -93,38 +102,36 @@ video.force-contain { object-fit: contain !important; }
     background: linear-gradient(to top, rgba(139,92,246,0.05), transparent);
 }
 
-/* Chat Messages */
+/* --- MENSAGENS DO CHAT (CORRIGIDO) --- */
 .chat-msg {
-    background: var(--input-bg); /* Unificado: Fundo igual para todos */
+    background: var(--input-bg); /* Fundo unificado */
     border-radius: 16px;
     padding: 10px 14px;
     border: 1px solid var(--border-color);
-    max-width: 90%;
+    max-width: 90%; /* Mais largo no mobile */
     position: relative;
-    transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    transition: transform 0.1s linear; /* Para o swipe */
     color: var(--text-primary);
     will-change: transform;
 }
 
-/* Estilo para "Swipe to Reply" */
-.swipe-reply-active {
-    transform: translateX(30px);
-}
-
+/* Diferenciação apenas na borda/alinhamento */
 .chat-msg.mine {
     align-self: flex-end;
     border-bottom-right-radius: 4px;
+    margin-left: auto; /* Força alinhamento à direita */
 }
 .chat-msg:not(.mine) {
     align-self: flex-start;
     border-top-left-radius: 4px;
+    margin-right: auto;
 }
 
-/* Ações da Mensagem (Reply/Delete) */
+/* Ações da Mensagem (Reply/Delete) - Flutuante */
 .msg-actions {
     position: absolute;
-    top: -8px;
-    right: 0;
+    top: -12px;
+    right: 10px;
     display: flex;
     gap: 4px;
     opacity: 0;
@@ -132,11 +139,20 @@ video.force-contain { object-fit: contain !important; }
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: 20px;
-    padding: 2px 6px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-    z-index: 5;
+    padding: 4px 8px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    z-index: 10;
 }
-.chat-msg:hover .msg-actions { opacity: 1; }
+/* No mobile, ações da minha mensagem ficam levemente visíveis para indicar interatividade */
+.chat-msg:hover .msg-actions, 
+.chat-msg.mine .msg-actions { 
+    opacity: 1; 
+}
+@media (max-width: 768px) {
+    .msg-actions { opacity: 0; } /* No mobile oculta por padrão pra não poluir, aparece no toque/swipe */
+    .chat-msg.swiped .msg-actions { opacity: 1; }
+}
+
 .msg-action-btn {
     padding: 4px;
     border-radius: 50%;
@@ -147,13 +163,14 @@ video.force-contain { object-fit: contain !important; }
 .msg-action-btn:hover { color: var(--text-primary); background: var(--input-bg); }
 .msg-action-btn.delete:hover { color: #ef4444; background: rgba(239, 68, 68, 0.1); }
 
-/* Modal */
+/* Modais */
 .custom-modal {
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     color: var(--text-primary);
 }
 
+/* Controles do Player */
 .control-btn {
     width: 40px;
     height: 40px;
@@ -168,6 +185,7 @@ video.force-contain { object-fit: contain !important; }
 }
 .control-btn:hover { background: white; color: black; transform: scale(1.1); }
 
+/* Seleção de Cores */
 .color-option.selected {
     ring-width: 3px;
     ring-color: var(--text-primary);
@@ -176,6 +194,7 @@ video.force-contain { object-fit: contain !important; }
     box-shadow: 0 0 10px rgba(0,0,0,0.5);
 }
 
+/* Toast Notification */
 #toast-container {
     position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
     z-index: 9999; display: flex; flex-direction: column; gap: 10px; pointer-events: none;
@@ -189,6 +208,7 @@ video.force-contain { object-fit: contain !important; }
 }
 @keyframes slideDown { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
+/* Grid de GIFs */
 .gif-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -207,9 +227,35 @@ video.force-contain { object-fit: contain !important; }
 }
 .gif-item:hover { border-color: #8b5cf6; }
 
+/* Grade de Programação */
+.active-program { 
+    background: linear-gradient(90deg, rgba(139, 92, 246, 0.15) 0%, transparent 100%); 
+    border-left: 2px solid #8b5cf6; 
+}
+
+/* Ajustes Específicos para Mobile */
 @media (max-width: 768px) {
-    #video-controls { opacity: 1 !important; background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 60%); pointer-events: none; }
-    #video-controls > * { pointer-events: auto; }
-    #mobile-video-container { position: sticky; top: 0; z-index: 50; }
-    .chat-msg.mine .msg-actions { opacity: 0.8; }
+    /* Player fixo no topo, controles visíveis ao toque */
+    #video-controls { 
+        opacity: 0; 
+        background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 60%); 
+        transition: opacity 0.3s;
+    }
+    #video-wrapper:hover #video-controls,
+    #video-wrapper:active #video-controls {
+        opacity: 1;
+    }
+    
+    /* Container do vídeo no mobile */
+    #mobile-video-container { 
+        position: sticky; 
+        top: 0; 
+        z-index: 50; 
+        /* Altura controlada para deixar espaço pro chat */
+    }
+    
+    /* Ajuste da bolha para facilitar o swipe */
+    .chat-msg {
+        touch-action: pan-y; /* Permite scroll vertical, mas horizontal é capturado pelo JS */
+    }
 }

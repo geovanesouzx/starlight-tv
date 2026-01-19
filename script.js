@@ -75,10 +75,16 @@ window.toggleGiphy = () => {
     if(giphyModal.classList.contains('hidden')) {
         giphyModal.classList.remove('hidden');
         searchGiphy('trending');
-        setTimeout(() => { giphyModal.classList.remove('opacity-0'); document.getElementById('giphy-content').classList.remove('scale-95'); }, 10);
+        // Pequeno delay para garantir que display:flex foi aplicado antes da opacidade
+        requestAnimationFrame(() => {
+            giphyModal.classList.remove('opacity-0');
+            const content = document.getElementById('giphy-content');
+            if(content) content.classList.remove('scale-95');
+        });
     } else {
         giphyModal.classList.add('opacity-0');
-        document.getElementById('giphy-content').classList.add('scale-95');
+        const content = document.getElementById('giphy-content');
+        if(content) content.classList.add('scale-95');
         setTimeout(() => giphyModal.classList.add('hidden'), 300);
     }
 };
@@ -298,24 +304,31 @@ function initSwipeToReply(element, id, username, text) {
 
     let startX = 0;
     let currentX = 0;
+    let isSwiping = false;
     
     element.addEventListener('touchstart', (e) => {
         startX = e.touches[0].clientX;
+        isSwiping = false;
         element.style.transition = 'none';
     }, {passive: true});
 
     element.addEventListener('touchmove', (e) => {
-        const diff = e.touches[0].clientX - startX;
-        // Apenas arraste para a direita e limite visual
+        const touchX = e.touches[0].clientX;
+        const diff = touchX - startX;
+
+        // Se o movimento for muito vertical, ignora (deixa rolar a página)
+        // Se for horizontal, marca como swiping
+        
         if (diff > 0 && diff < 100) {
             currentX = diff;
             element.style.transform = `translateX(${currentX}px)`;
+            isSwiping = true;
         }
     }, {passive: true});
 
     element.addEventListener('touchend', () => {
         element.style.transition = 'transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)';
-        if (currentX > 60) {
+        if (currentX > 60 && isSwiping) {
             // Trigger Reply
             startReply(id, username, text);
             // Feedback visual de vibração se suportado
@@ -323,6 +336,7 @@ function initSwipeToReply(element, id, username, text) {
         }
         element.style.transform = 'translateX(0)';
         currentX = 0;
+        isSwiping = false;
     });
 }
 
@@ -367,7 +381,8 @@ window.cancelReply = () => {
 window.openDeleteModal = (id) => {
     messageToDelete = id;
     confirmModal.classList.remove('hidden');
-    setTimeout(() => confirmModal.classList.remove('opacity-0'), 10);
+    // Pequeno delay para animação
+    requestAnimationFrame(() => confirmModal.classList.remove('opacity-0'));
 };
 
 window.closeConfirmModal = () => {
@@ -415,9 +430,16 @@ window.toggleSettings = () => {
             if(currentUserData.chatColor) selectedMyColor = currentUserData.chatColor;
             renderColorPickers();
         }
-        setTimeout(() => { settingsModal.classList.remove('opacity-0'); document.getElementById('settings-content').classList.remove('scale-95'); }, 10);
+        requestAnimationFrame(() => {
+            settingsModal.classList.remove('opacity-0');
+            const content = document.getElementById('settings-content');
+            if(content) content.classList.remove('scale-95');
+        });
     } else {
-        settingsModal.classList.add('opacity-0'); document.getElementById('settings-content').classList.add('scale-95'); setTimeout(() => settingsModal.classList.add('hidden'), 300);
+        settingsModal.classList.add('opacity-0');
+        const content = document.getElementById('settings-content');
+        if(content) content.classList.add('scale-95');
+        setTimeout(() => settingsModal.classList.add('hidden'), 300);
     }
 };
 
@@ -608,6 +630,9 @@ function goStandby() {
     document.getElementById('live-indicator').classList.add('hidden'); 
     document.getElementById('program-title').innerText = "Aguardando..."; 
     document.getElementById('program-category').innerText = "OFF AIR"; 
+    // Limpa a sinopse também
+    const descEl = document.getElementById('program-desc-mini');
+    if(descEl) descEl.innerText = "";
     document.getElementById('player-poster-mini').classList.add('hidden');
 }
 
@@ -637,6 +662,11 @@ function updateUI(item) {
     document.getElementById('program-title').innerText = item.title; 
     document.getElementById('program-category').innerText = item.category || 'PROGRAMA'; 
     document.getElementById('live-indicator').classList.remove('hidden'); 
+    
+    // CORREÇÃO: Atualizar Sinopse
+    const descEl = document.getElementById('program-desc-mini');
+    if(descEl) descEl.innerText = item.desc || "";
+
     const poster = document.getElementById('player-poster-mini'); 
     if(item.image) { poster.src = item.image; poster.classList.remove('hidden'); } else { poster.classList.add('hidden'); } 
     renderScheduleSidebar();
@@ -691,5 +721,30 @@ window.switchSidebarTab = (tab) => {
 window.toggleMute = () => { videoElement.muted = !videoElement.muted; updateMuteIcon(); };
 window.toggleZoom = () => { isVideoFitCover = !isVideoFitCover; const zoomIcon = document.getElementById('zoom-icon'); if (isVideoFitCover) { videoElement.classList.add('force-cover'); videoElement.classList.remove('force-contain'); if(zoomIcon) zoomIcon.setAttribute('data-lucide', 'rectangle-horizontal'); } else { videoElement.classList.add('force-contain'); videoElement.classList.remove('force-cover'); if(zoomIcon) zoomIcon.setAttribute('data-lucide', 'minimize'); } lucide.createIcons(); };
 window.toggleFullscreen = async () => { const wrapper = document.getElementById('video-wrapper'); const video = document.getElementById('main-video'); if (!document.fullscreenElement) { try { if (wrapper.requestFullscreen) { await wrapper.requestFullscreen(); } else if (video.webkitEnterFullscreen) { video.webkitEnterFullscreen(); return; } if (screen.orientation && screen.orientation.lock) { await screen.orientation.lock('landscape').catch(e => {}); } } catch (err) { console.error("Erro fullscreen:", err); } } else { try { await document.exitFullscreen(); if (screen.orientation && screen.orientation.unlock) { screen.orientation.unlock(); } } catch (err) { console.error("Erro exit fullscreen:", err); } } };
-window.openProgramModal = (itemId) => { const item = schedule.find(i => i.id === itemId); if(!item) return; document.getElementById('modal-title').innerText = item.title; document.getElementById('modal-category').innerText = item.category || 'PROGRAMA'; document.getElementById('modal-desc').innerText = item.desc || 'Sem sinopse disponível.'; document.getElementById('modal-time').innerText = item.time; const img = document.getElementById('modal-img'); img.src = item.image || "https://cdn-icons-png.flaticon.com/128/705/705062.png"; img.onerror = () => { img.src = "https://cdn-icons-png.flaticon.com/128/705/705062.png"; }; programModal.classList.remove('hidden'); setTimeout(() => { programModal.classList.remove('opacity-0'); document.getElementById('program-modal-content').classList.remove('scale-95'); }, 10); };
-window.closeProgramModal = () => { programModal.classList.add('opacity-0'); document.getElementById('program-modal-content').classList.add('scale-95'); setTimeout(() => programModal.classList.add('hidden'), 300); };
+window.openProgramModal = (itemId) => { 
+    const item = schedule.find(i => i.id === itemId); 
+    if(!item) return; 
+    document.getElementById('modal-title').innerText = item.title; 
+    document.getElementById('modal-category').innerText = item.category || 'PROGRAMA'; 
+    document.getElementById('modal-desc').innerText = item.desc || 'Sem sinopse disponível.'; 
+    document.getElementById('modal-time').innerText = item.time; 
+    const img = document.getElementById('modal-img'); 
+    img.src = item.image || "https://cdn-icons-png.flaticon.com/128/705/705062.png"; 
+    img.onerror = () => { img.src = "https://cdn-icons-png.flaticon.com/128/705/705062.png"; }; 
+    
+    requestAnimationFrame(() => {
+        programModal.classList.remove('hidden'); 
+        requestAnimationFrame(() => {
+            programModal.classList.remove('opacity-0'); 
+            const content = document.getElementById('program-modal-content');
+            if(content) content.classList.remove('scale-95'); 
+        });
+    });
+};
+
+window.closeProgramModal = () => { 
+    programModal.classList.add('opacity-0'); 
+    const content = document.getElementById('program-modal-content');
+    if(content) content.classList.add('scale-95'); 
+    setTimeout(() => programModal.classList.add('hidden'), 300); 
+};
