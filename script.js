@@ -2,7 +2,6 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.2.0/firebas
 import { getFirestore, doc, onSnapshot, collection, getDocs, limit, query, setDoc, getDoc, addDoc, orderBy, serverTimestamp, where } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-auth.js";
 
-// Configuração Firebase
 const firebaseConfig = {
     apiKey: "AIzaSyDD-CBc_0IeSKiW0Xy3sSjWkHu3j6g-38Q",
     authDomain: "gibiversee.firebaseapp.com",
@@ -30,22 +29,20 @@ let currentProgram = null;
 let hls = null;
 let globalSettings = {};
 let currentUserData = null;
+let checkInterval = null;
 
 // ==========================================
 // 1. FLUXO DE AUTENTICAÇÃO E AUDIO FIX
 // ==========================================
 
-// Função crítica: Desbloqueia o áudio aproveitando o clique do usuário
 function unlockAudio() {
     videoElement.muted = false;
     updateMuteIcon();
-    // Tenta iniciar um contexto de áudio ou tocar vazio para garantir permissão
     videoElement.play().catch(() => {});
 }
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
-        // Usuário logado
         loginScreen.classList.add('opacity-0');
         setTimeout(() => loginScreen.classList.add('hidden'), 500);
 
@@ -54,7 +51,7 @@ onAuthStateChanged(auth, async (user) => {
 
         if (userSnap.exists() && userSnap.data().username) {
             currentUserData = userSnap.data();
-            enterApp(true); // Flag true = já estava logado (refresh da página)
+            enterApp(true);
         } else {
             usernameScreen.classList.remove('hidden');
         }
@@ -62,27 +59,28 @@ onAuthStateChanged(auth, async (user) => {
         loginScreen.classList.remove('hidden');
         setTimeout(() => loginScreen.classList.remove('opacity-0'), 10);
         appContainer.style.opacity = '0';
+        if(checkInterval) clearInterval(checkInterval);
     }
 });
 
-// Entrar no app
 function enterApp(isAutoLogin = false) {
     usernameScreen.classList.add('hidden');
     appContainer.style.opacity = '1';
     
-    // Se NÃO for login automático (foi interação manual agora), desbloqueia o áudio
-    if (!isAutoLogin) {
-        unlockAudio();
-    }
+    if (!isAutoLogin) unlockAudio();
     
     initListeners();
     initChat();
+    
+    // INICIA O LOOP DE SINCRONIZAÇÃO AUTOMÁTICA
     checkScheduleLoop();
+    if(checkInterval) clearInterval(checkInterval);
+    checkInterval = setInterval(checkScheduleLoop, 5000); // Checa a cada 5s
 }
 
-// Login Actions - Unmute ao clicar
+// Botões de Login
 document.getElementById('btn-do-login').addEventListener('click', () => {
-    unlockAudio(); // Critical for autoplay policy
+    unlockAudio();
     const e = document.getElementById('login-email').value;
     const p = document.getElementById('login-password').value;
     if(!e || !p) return;
@@ -93,11 +91,7 @@ document.getElementById('btn-do-login').addEventListener('click', () => {
         enterApp(false);
     }).catch(err => {
         const el = document.getElementById('login-error');
-        if(err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-            el.innerText = "Email ou senha incorretos.";
-        } else {
-            el.innerText = "Erro ao entrar: " + err.message;
-        }
+        el.innerText = "Email ou senha incorretos.";
         el.classList.remove('hidden');
     });
 });
@@ -114,15 +108,7 @@ document.getElementById('btn-do-signup').addEventListener('click', () => {
         enterApp(false);
     }).catch(err => {
         const el = document.getElementById('login-error');
-        if (err.code === 'auth/email-already-in-use') {
-            el.innerText = "Este email já possui conta. Tente fazer login.";
-        } else if (err.code === 'auth/weak-password') {
-            el.innerText = "A senha deve ter pelo menos 6 caracteres.";
-        } else if (err.code === 'auth/invalid-email') {
-            el.innerText = "Email inválido.";
-        } else {
-            el.innerText = "Erro ao criar: " + err.message;
-        }
+        el.innerText = "Erro ao criar: " + err.message;
         el.classList.remove('hidden');
     });
 });
@@ -156,7 +142,7 @@ document.getElementById('btn-save-username').addEventListener('click', async () 
         enterApp(false);
     } catch(e) {
         console.error(e);
-        errorEl.innerText = "Erro ao salvar. Tente outro.";
+        errorEl.innerText = "Erro ao salvar.";
         errorEl.classList.remove('hidden');
     }
 });
@@ -171,6 +157,9 @@ window.sendMessage = async (e) => {
     if(!text || !currentUserData) return;
 
     input.value = '';
+    // Foco no mobile atrapalha, melhor tirar se estiver enviando
+    // input.focus(); 
+    
     try {
         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'chat'), {
             text: text,
@@ -216,22 +205,16 @@ window.toggleFullscreen = async () => {
                 return; 
             }
             if (screen.orientation && screen.orientation.lock) {
-                await screen.orientation.lock('landscape').catch(e => {
-                    console.log('Orientação automática não suportada ou bloqueada pelo navegador:', e);
-                });
+                await screen.orientation.lock('landscape').catch(() => {});
             }
-        } catch (err) {
-            console.error("Erro ao entrar em tela cheia:", err);
-        }
+        } catch (err) {}
     } else {
         try {
             await document.exitFullscreen();
             if (screen.orientation && screen.orientation.unlock) {
                 screen.orientation.unlock();
             }
-        } catch (err) {
-            console.error("Erro ao sair da tela cheia:", err);
-        }
+        } catch (err) {}
     }
 };
 
@@ -241,11 +224,11 @@ function initListeners() {
     onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'stream', 'live'), (snap) => {
         const data = snap.data();
         if(data && data.isLive) {
-            // Se o timestamp for muito recente (menos de 5s), força play
             const now = Date.now();
-            if (now - data.startTime < 5000) {
+            // Se o comando for novo (< 10s), troca imediatamente
+            if (now - data.startTime < 10000) {
                  playProgram({
-                     id: 'live_override',
+                     id: 'live_override_' + data.startTime, // ID único para forçar troca
                      title: data.title,
                      desc: data.desc,
                      url: data.url,
@@ -257,7 +240,6 @@ function initListeners() {
         }
     });
 
-    // Global Settings
     onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), (snap) => {
         globalSettings = snap.data() || {};
         const maint = document.getElementById('maintenance-screen');
@@ -270,14 +252,13 @@ function initListeners() {
         }
     });
 
-    // Schedule Data (Filtrando dia da semana para o Viewer)
     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'schedule'), (snap) => {
         schedule = [];
-        const today = new Date().getDay(); // 0 = Dom, 1 = Seg
+        const today = new Date().getDay(); 
         
         snap.forEach(d => {
             const data = d.data();
-            // Se não tiver dia definido, assume hoje (legado) OU se for o dia de hoje
+            // Carrega apenas a grade de HOJE
             if (data.day === undefined || parseInt(data.day) === today) {
                 schedule.push({id: d.id, ...data});
             }
@@ -285,26 +266,30 @@ function initListeners() {
         
         schedule.sort((a,b) => a.time.localeCompare(b.time));
         renderScheduleSidebar();
-        checkScheduleLoop();
+        checkScheduleLoop(); // Checa imediatamente ao carregar
     });
 }
 
-// 3. Auto-DJ Logic (The Brain)
+// 3. Auto-DJ Logic (Sincronização Auto)
 function checkScheduleLoop() {
     if(!auth.currentUser) return;
     
     const now = new Date();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
     
-    // PRIORIDADE 1: Item marcado como ATIVO manualmente (Botão "No Ar" do Admin)
+    // 1. Prioridade: Admin forçou "NO AR" na grade
     let activeItem = schedule.find(item => item.active === true);
 
-    // PRIORIDADE 2: Item baseado no horário (Fallback Automático)
+    // 2. Prioridade: Horário
     if (!activeItem) {
         activeItem = schedule.find(item => {
             const [h, m] = item.time.split(':').map(Number);
             const startMinutes = h * 60 + m;
             const endMinutes = startMinutes + parseInt(item.duration);
+            
+            // Lógica simples para lidar com virada de dia (ex: começa 23:00, dura 120min)
+            // Se endMinutes > 1440 (24h), o vídeo "acaba amanhã", mas ainda está tocando
+            // Simplificação: apenas checa se estamos dentro da janela inicial
             return currentMinutes >= startMinutes && currentMinutes < endMinutes;
         });
     }
@@ -314,6 +299,7 @@ function checkScheduleLoop() {
         const startTime = new Date();
         startTime.setHours(h, m, 0, 0);
         
+        // Calcula onde o vídeo deve estar
         const secondsSinceStart = (now - startTime) / 1000;
 
         playProgram(activeItem, secondsSinceStart);
@@ -324,15 +310,16 @@ function checkScheduleLoop() {
 
 // 4. Player Logic
 function playProgram(item, targetTime) {
+    // Se o programa mudou, carrega o novo
     if (!currentProgram || currentProgram.id !== item.id) {
-        console.log("Switching to:", item.title);
+        console.log("Trocando programa para:", item.title);
         currentProgram = item;
         loadStream(item.url, targetTime);
         updateUI(item);
     } else {
+        // Se é o mesmo programa, apenas sincroniza se desviar muito
         const drift = Math.abs(videoElement.currentTime - targetTime);
-        // Não sincronizar agressivamente se for stream infinito (duration 0)
-        if (drift > 5 && item.duration > 0) { 
+        if (drift > 8 && item.duration > 0) { 
             const syncBadge = document.getElementById('sync-status');
             syncBadge.classList.remove('hidden');
             videoElement.currentTime = targetTime;
@@ -350,13 +337,13 @@ function goStandby() {
     document.getElementById('program-title').innerText = "Aguardando...";
     document.getElementById('program-desc').innerText = "Fique ligado na programação.";
     document.getElementById('program-category').innerText = "OFF AIR";
+    document.getElementById('program-poster').src = "";
 }
 
 function loadStream(url, startTime) {
     standbyScreen.classList.add('hidden');
     let finalUrl = url;
     
-    // Suporte a API Anivideo
     if (url.includes('api.anivideo.net')) {
         try {
             const u = new URL(url);
@@ -366,11 +353,10 @@ function loadStream(url, startTime) {
 
     const onReady = () => {
         videoElement.currentTime = startTime;
-        // Tentativa agressiva de tocar com som se desbloqueado
         videoElement.play().then(() => {
             updateMuteIcon();
         }).catch(e => {
-            console.warn("Autoplay bloqueado. Mutando.", e);
+            // Se falhar autoplay com som, muta e tenta de novo
             videoElement.muted = true;
             videoElement.play();
         });
@@ -388,6 +374,12 @@ function loadStream(url, startTime) {
     }
 }
 
+// Quando o vídeo acaba, força verificação imediata do próximo
+videoElement.addEventListener('ended', () => {
+    console.log("Vídeo acabou. Buscando próximo...");
+    checkScheduleLoop();
+});
+
 // 5. UI Updates
 function updateUI(item) {
     document.getElementById('program-title').innerText = item.title;
@@ -402,7 +394,6 @@ function renderScheduleSidebar() {
     const list = document.getElementById('schedule-list');
     list.innerHTML = '';
     
-    // Atualiza o Label do dia da semana
     const days = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
     const today = new Date().getDay();
     document.getElementById('schedule-day-label').innerText = days[today].toUpperCase();
@@ -413,20 +404,24 @@ function renderScheduleSidebar() {
     }
 
     schedule.forEach(item => {
-        const isActive = (currentProgram && currentProgram.id === item.id) || item.active;
+        // Verifica se é o item atual (pelo ID ou flag active)
+        const isActive = (currentProgram && currentProgram.id === item.id);
         const el = document.createElement('div');
-        el.className = `flex items-center gap-3 p-3 rounded-xl transition-all ${isActive ? 'active-program bg-white/5' : 'hover:bg-white/5 opacity-60 hover:opacity-100'}`;
+        // Estilo diferente para item ativo
+        el.className = `flex items-center gap-3 p-3 rounded-xl transition-all ${isActive ? 'active-program bg-white/10 border-l-4 border-violet-500' : 'hover:bg-white/5 opacity-60 hover:opacity-100'}`;
         el.innerHTML = `
             <div class="text-center min-w-[50px]">
                 <div class="text-sm font-bold text-white font-mono">${item.time}</div>
                 ${isActive ? '<div class="text-[10px] text-violet-400 font-bold animate-pulse">NO AR</div>' : ''}
             </div>
-            <img src="${item.image || ''}" class="w-12 h-16 object-cover rounded bg-black">
+            <img src="${item.image || ''}" class="w-10 h-14 object-cover rounded bg-black">
             <div class="min-w-0">
                 <div class="text-sm font-bold text-white truncate">${item.title}</div>
                 <div class="text-[10px] text-zinc-400">${item.category} • ${item.duration}m</div>
             </div>
         `;
+        // Scroll automático para o item ativo na barra lateral
+        if(isActive) setTimeout(() => el.scrollIntoView({behavior: "smooth", block: "center"}), 500);
         list.appendChild(el);
     });
 }
@@ -489,10 +484,11 @@ setInterval(() => {
 
 lucide.createIcons();
 
+// Mouse controls
 let timer;
 const controls = document.getElementById('video-controls');
 const container = document.getElementById('video-wrapper');
-container.addEventListener('mousemove', () => {
+const handleMove = () => {
     controls.style.opacity = '1';
     container.style.cursor = 'default';
     clearTimeout(timer);
@@ -502,4 +498,6 @@ container.addEventListener('mousemove', () => {
             container.style.cursor = 'none';
         }
     }, 3000);
-});
+};
+container.addEventListener('mousemove', handleMove);
+container.addEventListener('click', handleMove); // Touch support
