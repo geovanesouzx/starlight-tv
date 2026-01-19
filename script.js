@@ -37,6 +37,7 @@ let isVideoFitCover = true;
 let replyTo = null;
 let messageToDelete = null;
 let typingTimeout = null;
+let controlsTimeout = null; // Timer para o player
 
 const CHAT_COLORS = [
     '#8b5cf6', '#ef4444', '#f97316', '#f59e0b', '#84cc16', 
@@ -75,12 +76,11 @@ window.toggleGiphy = () => {
     if(giphyModal.classList.contains('hidden')) {
         giphyModal.classList.remove('hidden');
         searchGiphy('trending');
-        // Pequeno delay para garantir que display:flex foi aplicado antes da opacidade
-        requestAnimationFrame(() => {
+        setTimeout(() => {
             giphyModal.classList.remove('opacity-0');
             const content = document.getElementById('giphy-content');
             if(content) content.classList.remove('scale-95');
-        });
+        }, 10);
     } else {
         giphyModal.classList.add('opacity-0');
         const content = document.getElementById('giphy-content');
@@ -177,7 +177,6 @@ async function sendMessageInternal(content, type) {
         text: content,
         type: type,
         username: currentUserData.username,
-        // Garante que a foto está sendo enviada corretamente ou usa fallback
         userPhoto: currentUserData.photoURL || "https://cdn-icons-png.flaticon.com/128/847/847969.png",
         userColor: currentUserData.chatColor || '#8b5cf6',
         uid: auth.currentUser.uid,
@@ -211,24 +210,24 @@ function initChat() {
 
     // Listener para "Quem está digitando"
     const typingRef = collection(db, 'artifacts', appId, 'public', 'data', 'typing');
-    // Limpar estados antigos no cliente (filtro simples)
     onSnapshot(typingRef, (snap) => {
         const now = Date.now();
         const typingUsers = [];
         snap.forEach(doc => {
             const data = doc.data();
-            // Considera digitando se atualizado nos últimos 5 segundos e não sou eu
             if (data.timestamp && (now - data.timestamp.toMillis()) < 5000 && doc.id !== auth.currentUser.uid) {
                 typingUsers.push(data.username);
             }
         });
         
         const indicator = document.getElementById('typing-indicator');
-        if (typingUsers.length > 0) {
-            indicator.innerText = `${typingUsers.join(', ')} está digitando...`;
-            indicator.classList.remove('opacity-0');
-        } else {
-            indicator.classList.add('opacity-0');
+        if (indicator) {
+            if (typingUsers.length > 0) {
+                indicator.innerText = `${typingUsers.join(', ')} está digitando...`;
+                indicator.classList.remove('opacity-0');
+            } else {
+                indicator.classList.add('opacity-0');
+            }
         }
     });
 }
@@ -240,18 +239,15 @@ function renderMessage(id, msg, container) {
     const nameColor = msg.userColor || '#8b5cf6';
     
     el.className = `chat-msg ${isMe ? 'mine' : ''} flex gap-3 mb-2 group relative`;
-    // Adiciona ID para facilitar delete/reply
     el.dataset.id = id; 
     el.dataset.username = msg.username;
     el.dataset.text = msg.type === 'gif' ? 'GIF' : msg.text;
 
-    // Conteúdo (Texto ou GIF)
     let content = `<div class="leading-snug break-words text-sm opacity-90">${msg.text}</div>`;
     if(msg.type === 'gif') {
         content = `<img src="${msg.text}" class="rounded-lg mt-1 max-w-[200px] h-auto border border-white/10">`;
     }
 
-    // Reply Block
     let replyBlock = '';
     if(msg.replyTo) {
         replyBlock = `
@@ -261,7 +257,6 @@ function renderMessage(id, msg, container) {
         `;
     }
 
-    // Actions
     const actions = `
         <div class="msg-actions">
             <div class="msg-action-btn" onclick="startReply('${id}', '${msg.username}', '${msg.type==='gif'?'GIF':msg.text}')" title="Responder"><i data-lucide="reply" class="w-3 h-3"></i></div>
@@ -269,8 +264,6 @@ function renderMessage(id, msg, container) {
         </div>
     `;
 
-    // Estrutura unificada: Foto sempre visível para os outros.
-    // Para mim: sem foto, alinhado à direita.
     if(isMe) {
          el.innerHTML = `
             ${actions}
@@ -292,15 +285,13 @@ function renderMessage(id, msg, container) {
         `;
     }
     
-    // Swipe Logic (Mobile)
     initSwipeToReply(el, id, msg.username, msg.type === 'gif' ? 'GIF' : msg.text);
-
     container.appendChild(el);
 }
 
 // --- SWIPE TO REPLY ---
 function initSwipeToReply(element, id, username, text) {
-    if (window.innerWidth > 768) return; // Apenas mobile
+    if (window.innerWidth > 768) return;
 
     let startX = 0;
     let currentX = 0;
@@ -315,9 +306,6 @@ function initSwipeToReply(element, id, username, text) {
     element.addEventListener('touchmove', (e) => {
         const touchX = e.touches[0].clientX;
         const diff = touchX - startX;
-
-        // Se o movimento for muito vertical, ignora (deixa rolar a página)
-        // Se for horizontal, marca como swiping
         
         if (diff > 0 && diff < 100) {
             currentX = diff;
@@ -329,9 +317,7 @@ function initSwipeToReply(element, id, username, text) {
     element.addEventListener('touchend', () => {
         element.style.transition = 'transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)';
         if (currentX > 60 && isSwiping) {
-            // Trigger Reply
             startReply(id, username, text);
-            // Feedback visual de vibração se suportado
             if (navigator.vibrate) navigator.vibrate(50);
         }
         element.style.transform = 'translateX(0)';
@@ -345,23 +331,15 @@ const chatInput = document.getElementById('chat-input');
 chatInput.addEventListener('input', () => {
     if (!auth.currentUser || !currentUserData) return;
     
-    // Atualiza timestamp de digitação
     clearTimeout(typingTimeout);
     
-    // Grava no Firestore (debounce para não estourar escritas)
-    // Usamos um timeout para evitar spam de writes a cada tecla, 
-    // mas garantindo que o status se mantenha 'vivo'
     const typingRef = doc(db, 'artifacts', appId, 'public', 'data', 'typing', auth.currentUser.uid);
-    
     setDoc(typingRef, {
         username: currentUserData.username,
         timestamp: serverTimestamp()
     });
 
-    // Limpa status após parar de digitar
-    typingTimeout = setTimeout(() => {
-       // Opcional: remover o documento ou deixar o timestamp expirar no filtro do listener
-    }, 5000);
+    typingTimeout = setTimeout(() => {}, 5000);
 });
 
 
@@ -381,8 +359,7 @@ window.cancelReply = () => {
 window.openDeleteModal = (id) => {
     messageToDelete = id;
     confirmModal.classList.remove('hidden');
-    // Pequeno delay para animação
-    requestAnimationFrame(() => confirmModal.classList.remove('opacity-0'));
+    setTimeout(() => confirmModal.classList.remove('opacity-0'), 10);
 };
 
 window.closeConfirmModal = () => {
@@ -404,7 +381,6 @@ document.getElementById('btn-confirm-delete').addEventListener('click', async ()
 });
 
 // --- SETTINGS & AUTH ---
-// Carregar configurações de cor
 function renderColorPickers() {
     const container = document.getElementById('color-picker-container');
     container.innerHTML = '';
@@ -430,11 +406,11 @@ window.toggleSettings = () => {
             if(currentUserData.chatColor) selectedMyColor = currentUserData.chatColor;
             renderColorPickers();
         }
-        requestAnimationFrame(() => {
+        setTimeout(() => {
             settingsModal.classList.remove('opacity-0');
             const content = document.getElementById('settings-content');
             if(content) content.classList.remove('scale-95');
-        });
+        }, 10);
     } else {
         settingsModal.classList.add('opacity-0');
         const content = document.getElementById('settings-content');
@@ -517,6 +493,7 @@ function enterApp(isAutoLogin = false) {
     if (!isAutoLogin) unlockAudio(); 
     initListeners(); 
     initChat(); 
+    initPlayerControls(); // Inicia controle de auto-hide
     checkScheduleLoop(); 
     setInterval(checkScheduleLoop, 1000); 
 }
@@ -630,7 +607,8 @@ function goStandby() {
     document.getElementById('live-indicator').classList.add('hidden'); 
     document.getElementById('program-title').innerText = "Aguardando..."; 
     document.getElementById('program-category').innerText = "OFF AIR"; 
-    // Limpa a sinopse também
+    
+    // Limpar sinopse e imagem
     const descEl = document.getElementById('program-desc-mini');
     if(descEl) descEl.innerText = "";
     document.getElementById('player-poster-mini').classList.add('hidden');
@@ -663,7 +641,7 @@ function updateUI(item) {
     document.getElementById('program-category').innerText = item.category || 'PROGRAMA'; 
     document.getElementById('live-indicator').classList.remove('hidden'); 
     
-    // CORREÇÃO: Atualizar Sinopse
+    // Restaura informações do player (sinopse e poster)
     const descEl = document.getElementById('program-desc-mini');
     if(descEl) descEl.innerText = item.desc || "";
 
@@ -701,6 +679,30 @@ function updateMuteIcon() {
     lucide.createIcons(); 
 }
 
+// Player Overlay Logic
+function initPlayerControls() {
+    const videoWrapper = document.getElementById('video-wrapper');
+    const videoControls = document.getElementById('video-controls');
+
+    if (videoWrapper && videoControls) {
+        const showControls = () => {
+            videoControls.style.opacity = '1';
+            videoWrapper.style.cursor = 'default';
+            clearTimeout(controlsTimeout);
+            controlsTimeout = setTimeout(() => {
+                if (!videoElement.paused) {
+                    videoControls.style.opacity = '0';
+                    videoWrapper.style.cursor = 'none';
+                }
+            }, 3000);
+        };
+
+        videoWrapper.addEventListener('mousemove', showControls);
+        videoWrapper.addEventListener('click', showControls);
+        videoWrapper.addEventListener('touchstart', showControls, {passive: true});
+    }
+}
+
 // UI Controls
 window.switchSidebarTab = (tab) => {
     const chatBtn = document.getElementById('tab-chat');
@@ -721,6 +723,7 @@ window.switchSidebarTab = (tab) => {
 window.toggleMute = () => { videoElement.muted = !videoElement.muted; updateMuteIcon(); };
 window.toggleZoom = () => { isVideoFitCover = !isVideoFitCover; const zoomIcon = document.getElementById('zoom-icon'); if (isVideoFitCover) { videoElement.classList.add('force-cover'); videoElement.classList.remove('force-contain'); if(zoomIcon) zoomIcon.setAttribute('data-lucide', 'rectangle-horizontal'); } else { videoElement.classList.add('force-contain'); videoElement.classList.remove('force-cover'); if(zoomIcon) zoomIcon.setAttribute('data-lucide', 'minimize'); } lucide.createIcons(); };
 window.toggleFullscreen = async () => { const wrapper = document.getElementById('video-wrapper'); const video = document.getElementById('main-video'); if (!document.fullscreenElement) { try { if (wrapper.requestFullscreen) { await wrapper.requestFullscreen(); } else if (video.webkitEnterFullscreen) { video.webkitEnterFullscreen(); return; } if (screen.orientation && screen.orientation.lock) { await screen.orientation.lock('landscape').catch(e => {}); } } catch (err) { console.error("Erro fullscreen:", err); } } else { try { await document.exitFullscreen(); if (screen.orientation && screen.orientation.unlock) { screen.orientation.unlock(); } } catch (err) { console.error("Erro exit fullscreen:", err); } } };
+
 window.openProgramModal = (itemId) => { 
     const item = schedule.find(i => i.id === itemId); 
     if(!item) return; 
@@ -732,14 +735,14 @@ window.openProgramModal = (itemId) => {
     img.src = item.image || "https://cdn-icons-png.flaticon.com/128/705/705062.png"; 
     img.onerror = () => { img.src = "https://cdn-icons-png.flaticon.com/128/705/705062.png"; }; 
     
-    requestAnimationFrame(() => {
-        programModal.classList.remove('hidden'); 
-        requestAnimationFrame(() => {
-            programModal.classList.remove('opacity-0'); 
-            const content = document.getElementById('program-modal-content');
-            if(content) content.classList.remove('scale-95'); 
-        });
-    });
+    // Simplificada lógica de exibição para evitar bugs
+    programModal.classList.remove('hidden');
+    // Pequeno delay para permitir que o navegador renderize o display block antes da opacidade
+    setTimeout(() => {
+        programModal.classList.remove('opacity-0');
+        const content = document.getElementById('program-modal-content');
+        if(content) content.classList.remove('scale-95');
+    }, 50);
 };
 
 window.closeProgramModal = () => { 
