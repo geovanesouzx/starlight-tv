@@ -30,6 +30,7 @@ let currentProgram = null;
 let hls = null;
 let globalSettings = {};
 let currentUserData = null;
+let isVideoFitCover = true; // NOVO: Controle de Zoom
 
 // ==========================================
 // 1. FLUXO DE AUTENTICAÇÃO E AUDIO FIX
@@ -78,6 +79,9 @@ function enterApp(isAutoLogin = false) {
     initListeners();
     initChat();
     checkScheduleLoop();
+
+    // NOVO: Intervalo para garantir sincronização automática sem refresh
+    setInterval(checkScheduleLoop, 1000);
 }
 
 // Login Actions - Unmute ao clicar
@@ -171,6 +175,10 @@ window.sendMessage = async (e) => {
     if(!text || !currentUserData) return;
 
     input.value = '';
+    
+    // Foca de volta no input apenas se não for mobile (para teclado não ficar subindo/descendo)
+    if(window.innerWidth > 768) input.focus();
+
     try {
         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'chat'), {
             text: text,
@@ -184,23 +192,47 @@ window.sendMessage = async (e) => {
 };
 
 window.switchSidebarTab = (tab) => {
-    document.getElementById('tab-grade').classList.toggle('active', tab === 'grade');
-    document.getElementById('tab-chat').classList.toggle('active', tab === 'chat');
-    
-    if(tab === 'grade') {
-        document.getElementById('content-grade').classList.remove('hidden');
-        document.getElementById('content-chat').classList.add('hidden');
+    const chatBtn = document.getElementById('tab-chat');
+    const gradeBtn = document.getElementById('tab-grade');
+    const chatContent = document.getElementById('content-chat');
+    const gradeContent = document.getElementById('content-grade');
+
+    if (tab === 'chat') {
+        if(chatBtn) chatBtn.classList.add('active');
+        if(gradeBtn) gradeBtn.classList.remove('active');
+        if(chatContent) chatContent.classList.remove('hidden');
+        if(gradeContent) gradeContent.classList.add('hidden');
+        // Scroll p/ baixo
+        const msgs = document.getElementById('chat-messages');
+        if(msgs) msgs.scrollTop = msgs.scrollHeight;
     } else {
-        document.getElementById('content-grade').classList.add('hidden');
-        document.getElementById('content-chat').classList.remove('hidden');
-        const container = document.getElementById('chat-messages');
-        container.scrollTop = container.scrollHeight;
+        if(gradeBtn) gradeBtn.classList.add('active');
+        if(chatBtn) chatBtn.classList.remove('active');
+        if(gradeContent) gradeContent.classList.remove('hidden');
+        if(chatContent) chatContent.classList.add('hidden');
     }
 };
 
 window.toggleMute = () => {
     videoElement.muted = !videoElement.muted;
     updateMuteIcon();
+};
+
+// NOVO: Função de Zoom
+window.toggleZoom = () => {
+    isVideoFitCover = !isVideoFitCover;
+    const zoomIcon = document.getElementById('zoom-icon');
+    
+    if (isVideoFitCover) {
+        videoElement.classList.add('video-cover');
+        videoElement.classList.remove('video-contain');
+        if(zoomIcon) zoomIcon.setAttribute('data-lucide', 'rectangle-horizontal'); 
+    } else {
+        videoElement.classList.add('video-contain');
+        videoElement.classList.remove('video-cover');
+        if(zoomIcon) zoomIcon.setAttribute('data-lucide', 'minimize');
+    }
+    lucide.createIcons();
 };
 
 window.toggleFullscreen = async () => {
@@ -304,7 +336,9 @@ function checkScheduleLoop() {
         activeItem = schedule.find(item => {
             const [h, m] = item.time.split(':').map(Number);
             const startMinutes = h * 60 + m;
-            const endMinutes = startMinutes + parseInt(item.duration);
+            const duration = parseInt(item.duration) || 30; // default 30 min se não especificado
+            const endMinutes = startMinutes + duration;
+            
             return currentMinutes >= startMinutes && currentMinutes < endMinutes;
         });
     }
@@ -314,6 +348,7 @@ function checkScheduleLoop() {
         const startTime = new Date();
         startTime.setHours(h, m, 0, 0);
         
+        // Calcula tempo decorrido em segundos para sincronizar o vídeo
         const secondsSinceStart = (now - startTime) / 1000;
 
         playProgram(activeItem, secondsSinceStart);
@@ -327,12 +362,14 @@ function playProgram(item, targetTime) {
     if (!currentProgram || currentProgram.id !== item.id) {
         console.log("Switching to:", item.title);
         currentProgram = item;
+        
         loadStream(item.url, targetTime);
         updateUI(item);
     } else {
         const drift = Math.abs(videoElement.currentTime - targetTime);
         // Não sincronizar agressivamente se for stream infinito (duration 0)
-        if (drift > 5 && item.duration > 0) { 
+        // Aumentado threshold para 8s para evitar loops de sync
+        if (drift > 8 && item.duration > 0 && !videoElement.paused) { 
             const syncBadge = document.getElementById('sync-status');
             syncBadge.classList.remove('hidden');
             videoElement.currentTime = targetTime;
@@ -384,7 +421,7 @@ function loadStream(url, startTime) {
         hls.on(Hls.Events.MANIFEST_PARSED, onReady);
     } else {
         videoElement.src = finalUrl;
-        videoElement.addEventListener('loadedmetadata', onReady);
+        videoElement.addEventListener('loadedmetadata', onReady, {once: true});
     }
 }
 
@@ -393,13 +430,17 @@ function updateUI(item) {
     document.getElementById('program-title').innerText = item.title;
     document.getElementById('program-desc').innerText = item.desc || 'Sem descrição.';
     document.getElementById('program-category').innerText = item.category || 'PROGRAMA';
-    document.getElementById('program-poster').src = item.image || '';
+    // Verifica se elemento existe antes de atualizar
+    const poster = document.getElementById('program-poster');
+    if(poster) poster.src = item.image || '';
+    
     document.getElementById('live-indicator').classList.remove('hidden');
     renderScheduleSidebar();
 }
 
 function renderScheduleSidebar() {
     const list = document.getElementById('schedule-list');
+    if(!list) return;
     list.innerHTML = '';
     
     // Atualiza o Label do dia da semana
@@ -415,16 +456,15 @@ function renderScheduleSidebar() {
     schedule.forEach(item => {
         const isActive = (currentProgram && currentProgram.id === item.id) || item.active;
         const el = document.createElement('div');
-        el.className = `flex items-center gap-3 p-3 rounded-xl transition-all ${isActive ? 'active-program bg-white/5' : 'hover:bg-white/5 opacity-60 hover:opacity-100'}`;
+        el.className = `flex items-center gap-3 p-3 rounded-lg transition-all ${isActive ? 'active-program bg-white/5' : 'hover:bg-white/5 opacity-50 hover:opacity-100'}`;
         el.innerHTML = `
-            <div class="text-center min-w-[50px]">
+            <div class="text-center w-12 shrink-0">
                 <div class="text-sm font-bold text-white font-mono">${item.time}</div>
-                ${isActive ? '<div class="text-[10px] text-violet-400 font-bold animate-pulse">NO AR</div>' : ''}
+                ${isActive ? '<div class="text-[9px] text-violet-400 font-bold animate-pulse">NO AR</div>' : ''}
             </div>
-            <img src="${item.image || ''}" class="w-12 h-16 object-cover rounded bg-black">
             <div class="min-w-0">
                 <div class="text-sm font-bold text-white truncate">${item.title}</div>
-                <div class="text-[10px] text-zinc-400">${item.category} • ${item.duration}m</div>
+                <div class="text-[10px] text-zinc-400 truncate">${item.category || 'Programa'}</div>
             </div>
         `;
         list.appendChild(el);
@@ -444,13 +484,12 @@ function initChat() {
             const el = document.createElement('div');
             const isMe = msg.uid === auth.currentUser.uid;
             
-            el.className = `chat-msg ${isMe ? 'mine' : ''}`;
+            el.className = `chat-msg ${isMe ? 'mine' : ''} flex flex-col`;
             el.innerHTML = `
-                <div class="flex items-baseline justify-between mb-1">
-                    <span class="font-bold text-xs ${isMe ? 'text-violet-400' : 'text-zinc-400'}">${msg.username}</span>
-                    <span class="text-[10px] text-zinc-600">${msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '...'}</span>
+                <div class="flex justify-between items-baseline mb-1">
+                    <span class="text-[10px] font-bold uppercase tracking-wide username-label ${isMe ? 'text-white' : 'text-violet-400'}">${msg.username}</span>
                 </div>
-                <div class="text-sm text-zinc-200 break-words">${msg.text}</div>
+                <div class="leading-snug break-words">${msg.text}</div>
             `;
             container.appendChild(el);
         });
@@ -478,13 +517,15 @@ videoElement.addEventListener('timeupdate', () => {
         const elapsed = (new Date() - startTime) / 1000;
         const total = currentProgram.duration * 60;
         const pct = Math.min(100, Math.max(0, (elapsed / total) * 100));
-        document.getElementById('progress-bar').style.width = `${pct}%`;
+        const pbar = document.getElementById('progress-bar');
+        if(pbar) pbar.style.width = `${pct}%`;
     }
 });
 
 setInterval(() => {
     const d = new Date();
-    document.getElementById('clock').innerText = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    const clock = document.getElementById('clock');
+    if(clock) clock.innerText = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 }, 1000);
 
 lucide.createIcons();
@@ -492,14 +533,16 @@ lucide.createIcons();
 let timer;
 const controls = document.getElementById('video-controls');
 const container = document.getElementById('video-wrapper');
-container.addEventListener('mousemove', () => {
-    controls.style.opacity = '1';
-    container.style.cursor = 'default';
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-        if(!videoElement.paused) {
-            controls.style.opacity = '0';
-            container.style.cursor = 'none';
-        }
-    }, 3000);
-});
+if (container && controls) {
+    container.addEventListener('mousemove', () => {
+        controls.style.opacity = '1';
+        container.style.cursor = 'default';
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+            if(!videoElement.paused) {
+                controls.style.opacity = '0';
+                container.style.cursor = 'none';
+            }
+        }, 3000);
+    });
+}
