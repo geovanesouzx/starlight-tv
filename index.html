@@ -29,7 +29,8 @@
         <div class="w-full max-w-sm p-8">
             <div class="text-center mb-8">
                 <div class="w-16 h-16 bg-gradient-to-tr from-violet-600 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-2xl shadow-violet-500/30">
-                    <i data-lucide="zap" class="w-8 h-8 text-white fill-current"></i>
+                    <!-- Logo Principal (Login) -->
+                    <img src="https://cdn-icons-png.flaticon.com/128/705/705062.png" class="w-10 h-10 object-contain invert brightness-0 filter" alt="Logo">
                 </div>
                 <h1 class="text-3xl font-bold text-white tracking-tight">Starlight <span class="text-violet-500">TV</span></h1>
                 <p class="text-zinc-500 text-sm">Entre para assistir</p>
@@ -73,7 +74,8 @@
             <header class="flex justify-between items-center mb-4">
                 <div class="flex items-center gap-3">
                     <div class="w-8 h-8 bg-violet-600 rounded-lg flex items-center justify-center">
-                        <i data-lucide="zap" class="w-4 h-4 text-white fill-current"></i>
+                        <!-- Logo Menor (Header) -->
+                        <img src="https://cdn-icons-png.flaticon.com/128/705/705062.png" class="w-5 h-5 object-contain invert brightness-0 filter" alt="Logo">
                     </div>
                     <h1 class="text-xl font-bold tracking-wide">Starlight TV</h1>
                 </div>
@@ -92,6 +94,9 @@
             <div id="video-wrapper" class="video-container group relative">
                 <video id="main-video" class="absolute inset-0 w-full h-full object-cover" playsinline></video>
                 
+                <!-- MARCA D'ÁGUA -->
+                <img src="https://cdn-icons-png.flaticon.com/128/705/705062.png" class="absolute bottom-6 right-6 w-12 h-12 opacity-50 z-10 pointer-events-none select-none drop-shadow-lg" alt="Watermark">
+
                 <!-- Standby Screen (No Content) -->
                 <div id="standby-screen" class="absolute inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center z-10">
                     <div class="relative w-24 h-24 mb-6 flex items-center justify-center pulse-circle">
