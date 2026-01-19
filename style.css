@@ -6,7 +6,6 @@ body {
     background: #000;
     color: white;
     height: 100vh;
-    /* Suporte para altura real em mobile (ignora barra de navegação) */
     height: 100dvh; 
     overflow: hidden;
     margin: 0;
@@ -15,11 +14,9 @@ body {
     flex-direction: column;
 }
 
-/* Scrollbar invisível mas funcional */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* Animações de Loading */
 @keyframes pulse-ring {
     0% { transform: scale(0.8); opacity: 0.5; }
     100% { transform: scale(2); opacity: 0; }
@@ -33,16 +30,16 @@ body {
     animation: pulse-ring 2s infinite;
 }
 
-/* Inputs de Autenticação */
+/* Inputs */
 .input-auth {
     background: #18181b;
     border: 1px solid #27272a;
     color: white;
-    padding: 16px; /* Touch friendly */
+    padding: 16px;
     border-radius: 12px;
     width: 100%;
     outline: none;
-    font-size: 16px; /* Evita zoom no iPhone */
+    font-size: 16px;
     transition: 0.2s;
 }
 .input-auth:focus {
@@ -50,7 +47,7 @@ body {
     background: #202024;
 }
 
-/* Abas (Tabs) */
+/* Tabs */
 .tab-btn {
     flex: 1;
     padding: 14px;
@@ -68,7 +65,7 @@ body {
     background: rgba(255,255,255,0.02);
 }
 
-/* Mensagens do Chat */
+/* Chat */
 .chat-msg {
     background: #18181b;
     border-radius: 12px;
@@ -82,7 +79,7 @@ body {
     animation: fadeIn 0.2s ease-out;
 }
 .chat-msg.mine {
-    background: #4c1d95; /* Violeta escuro */
+    background: #4c1d95; 
     border-color: #5b21b6;
     border-bottom-left-radius: 12px;
     border-bottom-right-radius: 2px;
@@ -90,7 +87,7 @@ body {
 }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
-/* Grade Programação */
+/* Grade */
 .program-item {
     display: flex;
     align-items: center;
@@ -107,17 +104,35 @@ body {
     border-color: rgba(139,92,246,0.3);
 }
 
-/* Layout Responsivo (Mobile First Logic) */
+/* Fullscreen Fixes */
+:fullscreen #video-wrapper {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: black;
+}
+::backdrop {
+    background: black;
+}
+
+/* Mobile First Layout */
 @media (max-width: 768px) {
-    /* Mobile: Vídeo no topo fixo, Chat embaixo preenchendo */
     .video-area {
-        flex: 0 0 auto; /* Não estica */
+        flex: 0 0 auto; 
     }
     
     #video-wrapper {
         width: 100vw;
-        height: 56.25vw; /* 16:9 Aspect Ratio exato */
-        max-height: 40vh; /* Limite de altura */
+        height: 56.25vw; 
+        max-height: 40vh; 
+    }
+
+    /* Quando em fullscreen no mobile, forçar dimensões */
+    :fullscreen #video-wrapper {
+        height: 100vh;
+        width: 100vw;
     }
 
     #video-controls {
@@ -126,8 +141,6 @@ body {
     
     #program-title { font-size: 1.2rem; }
     #program-category { font-size: 0.65rem; }
-    
-    /* Esconder descrição longa no mobile pra limpar a tela */
     #program-desc { display: none; } 
     
     #content-chat {
@@ -136,7 +149,6 @@ body {
 }
 
 @media (min-width: 769px) {
-    /* Desktop: Layout lado a lado */
     #video-wrapper {
         height: 100%;
         width: 100%;

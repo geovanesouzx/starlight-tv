@@ -12,7 +12,7 @@ const firebaseConfig = {
     appId: "1:1033170939996:web:b3452cf42b16db1fbe3699"
 };
 
-// ID FIXO (Não mude isso ou perderá a conexão com o Admin)
+// ID FIXO
 const appId = "starlight-tv-oficial-v1";
 
 const app = initializeApp(firebaseConfig);
@@ -32,7 +32,7 @@ let schedule = [];
 let currentProgram = null;
 let globalSettings = {};
 let currentUserData = null;
-let isStarted = false; // Controla se o usuário já deu "Start"
+let isStarted = false;
 
 // ==========================================
 // 1. FLUXO DE AUTENTICAÇÃO
@@ -40,23 +40,17 @@ let isStarted = false; // Controla se o usuário já deu "Start"
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
-        // Usuário logado
         loginScreen.classList.add('hidden');
-
-        // Buscar dados do usuário (nome)
         const userRef = doc(db, 'artifacts', appId, 'users', user.uid);
         const userSnap = await getDoc(userRef);
 
         if (userSnap.exists() && userSnap.data().username) {
-            // Tem nome? Vai pra tela de permissão
             currentUserData = userSnap.data();
             showPermissionScreen();
         } else {
-            // Não tem nome? Vai pra tela de username
             usernameScreen.classList.remove('hidden');
         }
     } else {
-        // Não logado
         loginScreen.classList.remove('hidden');
         loginScreen.classList.remove('opacity-0');
         usernameScreen.classList.add('hidden');
@@ -68,30 +62,23 @@ onAuthStateChanged(auth, async (user) => {
 
 function showPermissionScreen() {
     usernameScreen.classList.add('hidden');
-    // Só mostra se ainda não iniciou a sessão de vídeo
     if (!isStarted) {
         permissionScreen.classList.remove('hidden');
     }
 }
 
-// Botão "ASSISTIR" (Obrigatório para som no Mobile)
 document.getElementById('btn-permission-start').addEventListener('click', () => {
     isStarted = true;
-    permissionScreen.classList.add('hidden'); // Some com a tela
-    appContainer.style.opacity = '1'; // Mostra o app
+    permissionScreen.classList.add('hidden');
+    appContainer.style.opacity = '1';
     
-    // Inicia os sistemas
     initListeners();
     initChat();
     
-    // Tenta iniciar o áudio imediatamente (hack para iOS)
     videoElement.play().catch(() => {});
-    
-    // Força checagem da grade
     checkScheduleLoop();
 });
 
-// Login UI
 document.getElementById('btn-do-login').addEventListener('click', () => {
     const e = document.getElementById('login-email').value;
     const p = document.getElementById('login-password').value;
@@ -125,7 +112,6 @@ function toggleLoginLoading(isLoading) {
     btn.disabled = isLoading;
 }
 
-// Salvar Username
 document.getElementById('btn-save-username').addEventListener('click', async () => {
     const username = document.getElementById('username-input').value.trim();
     if(username.length < 3) return alert('Nome muito curto!');
@@ -135,7 +121,6 @@ document.getElementById('btn-save-username').addEventListener('click', async () 
 
     try {
         const uid = auth.currentUser.uid;
-        // Salva no perfil do usuário
         await setDoc(doc(db, 'artifacts', appId, 'users', uid), { 
             username: username,
             email: auth.currentUser.email
@@ -149,25 +134,21 @@ document.getElementById('btn-save-username').addEventListener('click', async () 
     }
 });
 
-// Logout Global
 window.logout = () => signOut(auth).then(() => location.reload());
-
 
 // ==========================================
 // 2. SINCRONIZAÇÃO E PLAYER (Core)
 // ==========================================
 
 function initListeners() {
-    // Escuta mudanças na Grade
     onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'schedule'), (snap) => {
         schedule = [];
         snap.forEach(d => schedule.push({id: d.id, ...d.data()}));
         schedule.sort((a,b) => a.time.localeCompare(b.time));
         renderScheduleSidebar();
-        checkScheduleLoop(); // Recalcula assim que a grade muda
+        checkScheduleLoop();
     });
 
-    // Escuta Configurações (Manutenção)
     onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), (snap) => {
         const settings = snap.data() || {};
         const maint = document.getElementById('maintenance-screen');
@@ -181,17 +162,14 @@ function initListeners() {
     });
 }
 
-// Lógica Principal de Sincronia
 function checkScheduleLoop() {
     if(!isStarted) return;
     
     const now = new Date();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
     
-    // 1. Prioridade: Item marcado manualmente como "No Ar" (Active)
     let activeItem = schedule.find(item => item.active === true);
 
-    // 2. Fallback: Item baseado no horário matemático
     if (!activeItem) {
         activeItem = schedule.find(item => {
             const [h, m] = item.time.split(':').map(Number);
@@ -202,57 +180,31 @@ function checkScheduleLoop() {
     }
 
     if (activeItem) {
-        // Calcular tempo decorrido desde o início do programa
         const [h, m] = activeItem.time.split(':').map(Number);
-        
-        // Cria objeto data para o horário de início HOJE
         const programStartTime = new Date();
         programStartTime.setHours(h, m, 0, 0);
-        
-        // Se o horário de início for maior que agora (ex: virada do dia), ajusta para ontem (raro, mas seguro)
-        // Mas geralmente grade é do dia.
-        
-        // Diferença em segundos entre AGORA e o INÍCIO DO PROGRAMA
-        // Ex: Agora 14:10, Início 14:00 -> elapsed = 600 segundos
         let elapsedSeconds = (now - programStartTime) / 1000;
-
         playProgram(activeItem, elapsedSeconds);
     } else {
         goStandby();
     }
 }
 
-// Checa a cada 1 segundo
 setInterval(checkScheduleLoop, 1000);
 
 function playProgram(item, targetTime) {
-    // Se mudou o programa
     if (!currentProgram || currentProgram.id !== item.id) {
         console.log("Novo Programa Detectado:", item.title);
         currentProgram = item;
         loadStream(item.url, targetTime);
         updateUI(item);
     } else {
-        // Se é o mesmo programa, verificar SINCRONIA FINA
-        // targetTime é onde o vídeo DEVERIA estar agora.
-        
-        if (videoElement.paused) return; // Não força sync se pausado (ou carregando)
-
-        const currentVideoTime = videoElement.currentTime;
-        const drift = Math.abs(currentVideoTime - targetTime);
-
-        // Se a diferença for maior que 4 segundos, pula para o tempo certo
-        // (Isso corrige se alguém entrou atrasado ou o vídeo travou)
+        if (videoElement.paused) return;
+        const drift = Math.abs(videoElement.currentTime - targetTime);
         if (drift > 4) {
-            console.log(`Resincronizando... Desvio de ${drift.toFixed(1)}s`);
-            
-            // Mostra badge
             const syncBadge = document.getElementById('sync-status');
             syncBadge.classList.remove('hidden');
-            
-            // Pula
             videoElement.currentTime = targetTime;
-            
             setTimeout(() => syncBadge.classList.add('hidden'), 2000);
         }
     }
@@ -270,7 +222,6 @@ function goStandby() {
 function loadStream(url, startTime) {
     standbyScreen.classList.add('hidden');
     
-    // Tratamento básico de URL
     let finalUrl = url;
     if (url.includes('api.anivideo.net')) {
         try {
@@ -282,8 +233,7 @@ function loadStream(url, startTime) {
     const onReady = () => {
         videoElement.currentTime = startTime;
         videoElement.play().catch(e => {
-            console.warn("Autoplay bloqueado pelo navegador. Usuário precisa interagir.", e);
-            // O botão de permissão inicial deve prevenir isso, mas se falhar:
+            console.warn("Autoplay bloqueado.", e);
             videoElement.muted = true;
             videoElement.play();
         });
@@ -344,14 +294,12 @@ function renderScheduleSidebar() {
 
 function initChat() {
     const chatRef = collection(db, 'artifacts', appId, 'public', 'data', 'chat');
-    // Limite de 50 mensagens para não pesar
     const q = query(chatRef, orderBy('timestamp', 'asc'), limit(50));
     
     onSnapshot(q, (snap) => {
         const container = document.getElementById('chat-messages');
-        container.innerHTML = ''; // Limpa e recria (simples)
-        
-        let lastMsg = null; // Para verificar scroll
+        container.innerHTML = ''; 
+        let lastMsg = null; 
 
         snap.forEach(doc => {
             const msg = doc.data();
@@ -359,8 +307,6 @@ function initChat() {
             const isMe = auth.currentUser && msg.uid === auth.currentUser.uid;
             
             el.className = `chat-msg ${isMe ? 'mine' : ''}`;
-            
-            // Hora da mensagem
             const timeStr = msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
 
             el.innerHTML = `
@@ -374,20 +320,17 @@ function initChat() {
             lastMsg = el;
         });
         
-        // Auto scroll sempre que chegar msg nova
         if(lastMsg) lastMsg.scrollIntoView({ behavior: "smooth" });
     });
 }
 
-// Tornar global para o HTML acessar
 window.sendMessage = async (e) => {
     e.preventDefault();
     const input = document.getElementById('chat-input');
     const text = input.value.trim();
     if(!text || !currentUserData) return;
 
-    input.value = ''; // Limpa input rápido
-    
+    input.value = ''; 
     try {
         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'chat'), {
             text: text,
@@ -401,18 +344,15 @@ window.sendMessage = async (e) => {
 };
 
 window.switchSidebarTab = (tab) => {
-    // UI Update
     document.getElementById('tab-grade').classList.toggle('active', tab === 'grade');
     document.getElementById('tab-chat').classList.toggle('active', tab === 'chat');
     
-    // Content Update
     if(tab === 'grade') {
         document.getElementById('content-grade').classList.remove('hidden');
         document.getElementById('content-chat').classList.add('hidden');
     } else {
         document.getElementById('content-grade').classList.add('hidden');
         document.getElementById('content-chat').classList.remove('hidden');
-        // Scroll to bottom
         const container = document.getElementById('chat-messages');
         container.scrollTop = container.scrollHeight;
     }
@@ -423,10 +363,43 @@ window.toggleMute = () => {
     updateMuteIcon();
 };
 
-window.toggleFullscreen = () => {
-    const el = document.getElementById('video-wrapper');
-    if(document.fullscreenElement) document.exitFullscreen();
-    else el.requestFullscreen ? el.requestFullscreen() : el.classList.toggle('fake-fullscreen');
+// ==========================================
+// FULLSCREEN COM ROTAÇÃO (Fix Mobile)
+// ==========================================
+window.toggleFullscreen = async () => {
+    const wrapper = document.getElementById('video-wrapper');
+    const video = document.getElementById('main-video');
+
+    if (!document.fullscreenElement) {
+        try {
+            if (wrapper.requestFullscreen) {
+                await wrapper.requestFullscreen();
+            } else if (video.webkitEnterFullscreen) {
+                // Suporte iOS nativo
+                video.webkitEnterFullscreen();
+                return; 
+            }
+
+            // Tentar travar a orientação para Landscape (Android/Chrome)
+            if (screen.orientation && screen.orientation.lock) {
+                await screen.orientation.lock('landscape').catch(e => {
+                    console.log('Orientação automática não suportada ou bloqueada pelo navegador:', e);
+                });
+            }
+        } catch (err) {
+            console.error("Erro ao entrar em tela cheia:", err);
+        }
+    } else {
+        try {
+            await document.exitFullscreen();
+            // Destravar orientação ao sair
+            if (screen.orientation && screen.orientation.unlock) {
+                screen.orientation.unlock();
+            }
+        } catch (err) {
+            console.error("Erro ao sair da tela cheia:", err);
+        }
+    }
 };
 
 function updateMuteIcon() {
@@ -441,16 +414,13 @@ function updateMuteIcon() {
     lucide.createIcons();
 }
 
-// Clock UI
 setInterval(() => {
     const d = new Date();
     document.getElementById('clock').innerText = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 }, 1000);
 
-// Init Icons
 lucide.createIcons();
 
-// Mouse controls fading
 let timer;
 const controls = document.getElementById('video-controls');
 const container = document.getElementById('video-wrapper');
