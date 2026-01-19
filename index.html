@@ -2,9 +2,8 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Starlight TV - Liquid Glass</title>
-    <!-- 1. FAVICON ATUALIZADO -->
     <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/128/705/705062.png">
     
     <!-- Bibliotecas Externas -->
@@ -16,11 +15,10 @@
     <!-- Link para o CSS separado -->
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="flex items-center justify-center p-4 h-screen bg-black">
+<body class="bg-black text-white h-[100dvh] w-screen overflow-hidden flex flex-col items-center justify-center">
 
     <!-- MANUTENÇÃO -->
     <div id="maintenance-screen" class="fixed inset-0 z-[120] bg-black flex flex-col items-center justify-center hidden">
-        <!-- ÍCONE ORIGINAL (SEM FILTRO) -->
         <img src="https://cdn-icons-png.flaticon.com/128/705/705062.png" class="w-24 h-24 mb-6 object-contain animate-pulse" alt="Manutenção">
         <h1 class="text-2xl font-bold text-white mb-2">EM MANUTENÇÃO</h1>
         <p id="maintenance-message" class="text-zinc-500 font-mono text-sm">Voltamos em breve.</p>
@@ -30,9 +28,8 @@
     <div id="login-screen" class="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center transition-all duration-700">
         <div class="w-full max-w-sm p-8">
             <div class="text-center mb-8">
-                <div class="w-24 h-24 bg-gradient-to-tr from-violet-600/20 to-indigo-600/20 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-violet-500/10 border border-white/5">
-                    <!-- LOGO PRINCIPAL (SEM FILTRO) -->
-                    <img src="https://cdn-icons-png.flaticon.com/128/705/705062.png" class="w-16 h-16 object-contain drop-shadow-lg" alt="Logo">
+                <div class="w-20 h-20 bg-gradient-to-tr from-violet-600/20 to-indigo-600/20 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl border border-white/5">
+                    <img src="https://cdn-icons-png.flaticon.com/128/705/705062.png" class="w-12 h-12 object-contain drop-shadow-lg" alt="Logo">
                 </div>
                 <h1 class="text-3xl font-bold text-white tracking-tight">Starlight <span class="text-violet-500">TV</span></h1>
                 <p class="text-zinc-500 text-sm">Entre para assistir</p>
@@ -42,41 +39,36 @@
                 <input type="email" id="login-email" class="input-auth" placeholder="Seu email">
                 <input type="password" id="login-password" class="input-auth" placeholder="Sua senha">
                 
-                <button id="btn-do-login" class="w-full py-3 bg-white text-black font-bold rounded-xl hover:scale-[1.02] transition shadow-lg shadow-white/10">
-                    ENTRAR
-                </button>
-                <button id="btn-do-signup" class="w-full py-3 bg-zinc-800 text-white font-bold rounded-xl hover:bg-zinc-700 transition">
-                    CRIAR CONTA
-                </button>
+                <button id="btn-do-login" class="w-full py-3 bg-white text-black font-bold rounded-xl hover:scale-[1.02] transition shadow-lg">ENTRAR</button>
+                <button id="btn-do-signup" class="w-full py-3 bg-zinc-800 text-white font-bold rounded-xl hover:bg-zinc-700 transition">CRIAR CONTA</button>
             </div>
             <p id="login-error" class="text-red-500 text-xs mt-4 text-center hidden"></p>
         </div>
     </div>
 
-    <!-- TELA DE USERNAME (SE NOVO USUÁRIO) -->
+    <!-- TELA DE USERNAME -->
     <div id="username-screen" class="fixed inset-0 z-[110] bg-black flex flex-col items-center justify-center hidden">
         <div class="w-full max-w-sm p-8 text-center">
             <h2 class="text-2xl font-bold text-white mb-2">Como devemos te chamar?</h2>
-            <p class="text-zinc-500 text-sm mb-6">Escolha um nome de usuário único para o chat.</p>
-            
+            <p class="text-zinc-500 text-sm mb-6">Escolha um nome de usuário único.</p>
             <input type="text" id="username-input" class="input-auth text-center text-lg font-bold tracking-wide" placeholder="@usuario">
-            <button id="btn-save-username" class="w-full mt-4 py-3 bg-violet-600 text-white font-bold rounded-xl hover:bg-violet-500 transition shadow-lg shadow-violet-500/20">
-                CONFIRMAR
-            </button>
+            <button id="btn-save-username" class="w-full mt-4 py-3 bg-violet-600 text-white font-bold rounded-xl hover:bg-violet-500 transition shadow-lg">CONFIRMAR</button>
             <p id="username-error" class="text-red-500 text-xs mt-4 hidden"></p>
         </div>
     </div>
 
-    <!-- APP GRID -->
-    <div id="app-container" class="glass-panel w-full max-w-[1600px] h-[90vh] flex flex-col md:flex-row overflow-hidden relative z-10 opacity-0 transition-opacity duration-1000">
+    <!-- APP CONTAINER PRINCIPAL -->
+    <!-- Mobile: Flex Column (Video Topo Fixo, Resto Flex) -->
+    <!-- Desktop: Layout Glass Panel Centralizado -->
+    <div id="app-container" class="w-full h-full md:max-w-[1600px] md:h-[90vh] md:glass-panel flex flex-col md:flex-row overflow-hidden relative z-10 opacity-0 transition-opacity duration-1000">
         
-        <!-- MAIN PLAYER AREA -->
-        <main class="flex-1 flex flex-col p-4 md:p-6 relative min-w-0">
-            <!-- Header -->
-            <header class="flex justify-between items-center mb-4">
+        <!-- ÁREA DO VIDEO (PLAYER) -->
+        <main class="w-full md:flex-1 flex flex-col relative shrink-0 h-[35vh] md:h-auto bg-black border-b md:border-b-0 md:border-r border-white/10 md:p-6">
+            
+            <!-- Header Desktop Only -->
+            <header class="hidden md:flex justify-between items-center mb-4">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 bg-violet-600/20 border border-violet-500/30 rounded-lg flex items-center justify-center">
-                        <!-- LOGO HEADER (SEM FILTRO) -->
                         <img src="https://cdn-icons-png.flaticon.com/128/705/705062.png" class="w-6 h-6 object-contain" alt="Logo">
                     </div>
                     <h1 class="text-xl font-bold tracking-wide">Starlight TV</h1>
@@ -86,105 +78,107 @@
                         <div class="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div> AO VIVO
                     </div>
                     <div class="font-mono text-zinc-400 text-sm bg-white/5 px-3 py-1 rounded-lg" id="clock">00:00</div>
-                    <button onclick="logout()" class="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition" title="Sair">
+                    <button onclick="logout()" class="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition">
                         <i data-lucide="log-out" class="w-4 h-4"></i>
                     </button>
                 </div>
             </header>
 
-            <!-- Video Player -->
-            <div id="video-wrapper" class="video-container group relative">
-                <video id="main-video" class="absolute inset-0 w-full h-full object-cover" playsinline></video>
+            <!-- Video Player Wrapper -->
+            <div id="video-wrapper" class="video-container group relative w-full h-full md:rounded-2xl overflow-hidden bg-black">
+                <!-- O Video -->
+                <video id="main-video" class="absolute inset-0 w-full h-full object-cover transition-all duration-300" playsinline></video>
                 
-                <!-- MARCA D'ÁGUA (Superior Direito, 50% Opacidade) -->
-                <img src="https://cdn-icons-png.flaticon.com/128/705/705062.png" class="absolute top-6 right-6 w-12 h-12 opacity-50 z-30 pointer-events-none select-none drop-shadow-lg" alt="Watermark">
+                <!-- MARCA D'ÁGUA (Inferior Direito, Pequena) -->
+                <img src="https://cdn-icons-png.flaticon.com/128/705/705062.png" class="absolute bottom-4 right-4 w-8 h-8 opacity-30 z-30 pointer-events-none select-none drop-shadow-lg" alt="Watermark">
 
-                <!-- Standby Screen (No Content) -->
+                <!-- Standby Screen -->
                 <div id="standby-screen" class="absolute inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center z-10">
-                    <div class="relative w-32 h-32 mb-6 flex items-center justify-center pulse-circle">
-                        <!-- LOGO STANDBY -->
-                        <img src="https://cdn-icons-png.flaticon.com/128/705/705062.png" class="w-20 h-20 object-contain" alt="Standby">
+                    <div class="relative w-24 h-24 mb-4 flex items-center justify-center pulse-circle">
+                        <img src="https://cdn-icons-png.flaticon.com/128/705/705062.png" class="w-14 h-14 object-contain" alt="Standby">
                     </div>
-                    <h2 class="text-2xl font-bold text-white mb-2">Aguardando Programação</h2>
-                    <p class="text-zinc-500 text-sm">O próximo programa começará no horário agendado.</p>
+                    <h2 class="text-lg font-bold text-white mb-1">Aguardando</h2>
+                    <p class="text-zinc-500 text-xs">O próximo programa começará em breve.</p>
                 </div>
 
                 <!-- Sync Overlay -->
                 <div id="sync-status" class="absolute top-4 left-4 bg-black/80 backdrop-blur px-3 py-1 rounded-lg text-xs font-bold text-emerald-400 hidden border border-emerald-500/30 z-40">
-                    <i data-lucide="refresh-cw" class="w-3 h-3 inline mr-1 animate-spin"></i> Sincronizando...
+                    <i data-lucide="refresh-cw" class="w-3 h-3 inline mr-1 animate-spin"></i> Sincronizando
                 </div>
 
                 <!-- Controls Overlay -->
-                <div id="video-controls" class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-8 z-20">
-                    <div class="transform translate-y-4 group-hover:translate-y-0 transition duration-300">
-                        <div class="flex items-end gap-4 mb-4">
-                            <img id="program-poster" src="" class="w-16 h-24 object-cover rounded-lg shadow-lg hidden md:block bg-zinc-800">
-                            <div>
-                                <div class="text-xs font-bold text-violet-400 mb-1 uppercase tracking-wider" id="program-category">CANAL OFF</div>
-                                <h2 id="program-title" class="text-2xl md:text-4xl font-bold text-white drop-shadow-lg leading-tight">...</h2>
-                                <p id="program-desc" class="text-zinc-300 text-sm md:text-base mt-2 line-clamp-2 max-w-2xl">...</p>
-                            </div>
+                <div id="video-controls" class="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4 md:p-8 z-20">
+                    
+                    <!-- Info do Programa (Sobreposto ao vídeo) -->
+                    <div class="mb-4">
+                        <div class="text-[10px] font-bold text-violet-400 mb-0.5 uppercase tracking-wider" id="program-category">CANAL OFF</div>
+                        <h2 id="program-title" class="text-lg md:text-3xl font-bold text-white drop-shadow-lg leading-tight line-clamp-1">...</h2>
+                        <p id="program-desc" class="text-zinc-300 text-xs md:text-sm mt-1 line-clamp-1 hidden md:block">...</p>
+                    </div>
+
+                    <div class="flex items-center gap-3 md:gap-4">
+                        <button onclick="toggleMute()" class="control-btn">
+                            <i id="mute-icon" data-lucide="volume-x" class="w-5 h-5"></i>
+                        </button>
+                        
+                        <!-- Barra de Progresso -->
+                        <div class="flex-1 h-1 bg-white/20 rounded-full overflow-hidden">
+                            <div id="progress-bar" class="h-full bg-violet-500 w-0 relative"></div>
                         </div>
                         
-                        <div class="flex items-center gap-4 mt-6">
-                            <button onclick="toggleMute()" class="w-12 h-12 rounded-full bg-white/10 hover:bg-white text-white hover:text-black backdrop-blur-md flex items-center justify-center transition-all">
-                                <i id="mute-icon" data-lucide="volume-x" class="w-5 h-5"></i>
-                            </button>
-                            
-                            <div class="flex-1 h-1 bg-white/20 rounded-full overflow-hidden">
-                                <div id="progress-bar" class="h-full bg-violet-500 w-0 relative">
-                                    <div class="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 bg-white rounded-full shadow"></div>
-                                </div>
-                            </div>
-                            
-                            <button onclick="toggleFullscreen()" class="w-12 h-12 rounded-full bg-white/10 hover:bg-white text-white hover:text-black backdrop-blur-md flex items-center justify-center transition-all">
-                                <i id="fullscreen-icon" data-lucide="maximize" class="w-5 h-5"></i>
-                            </button>
-                        </div>
+                        <!-- Botão de Zoom/Aspect Ratio -->
+                        <button onclick="toggleZoom()" class="control-btn" title="Ajustar Zoom">
+                            <i id="zoom-icon" data-lucide="rectangle-horizontal" class="w-5 h-5"></i>
+                        </button>
+
+                        <button onclick="toggleFullscreen()" class="control-btn">
+                            <i id="fullscreen-icon" data-lucide="maximize" class="w-5 h-5"></i>
+                        </button>
                     </div>
                 </div>
             </div>
         </main>
 
         <!-- Sidebar (Schedule & Chat) -->
-        <aside class="w-full md:w-80 border-t md:border-t-0 md:border-l border-white/5 bg-black/20 backdrop-blur-3xl flex flex-col h-[40vh] md:h-auto">
-            <!-- Tabs -->
-            <div class="flex border-b border-white/5">
-                <button onclick="switchSidebarTab('grade')" id="tab-grade" class="tab-btn active">
-                    <i data-lucide="calendar" class="w-4 h-4 inline mr-1"></i> Grade
-                </button>
-                <button onclick="switchSidebarTab('chat')" id="tab-chat" class="tab-btn">
+        <aside class="w-full md:w-80 flex flex-col bg-[#0f0f0f] md:bg-transparent h-[65vh] md:h-full relative">
+            <!-- Tabs de Navegação -->
+            <div class="flex border-b border-white/5 bg-black/40 backdrop-blur-md shrink-0">
+                <button onclick="switchSidebarTab('chat')" id="tab-chat" class="tab-btn active">
                     <i data-lucide="message-square" class="w-4 h-4 inline mr-1"></i> Chat
+                </button>
+                <button onclick="switchSidebarTab('grade')" id="tab-grade" class="tab-btn">
+                    <i data-lucide="calendar" class="w-4 h-4 inline mr-1"></i> Grade
                 </button>
             </div>
             
-            <!-- Schedule Content -->
-            <div id="content-grade" class="flex-1 overflow-y-auto p-4 space-y-2 no-scrollbar">
-                <!-- Dia da Semana Atual -->
-                <div id="schedule-day-label" class="text-center text-xs text-violet-400 font-bold uppercase mb-2 tracking-widest bg-white/5 py-1 rounded">...</div>
-                <div id="schedule-list"></div>
-                <div class="text-[10px] text-center text-zinc-600 mt-4">Starlight Broadcast System &copy; 2024</div>
-            </div>
-
-            <!-- Chat Content -->
-            <div id="content-chat" class="flex-1 flex flex-col hidden h-full overflow-hidden">
-                <div id="chat-messages" class="flex-1 overflow-y-auto p-4 no-scrollbar space-y-2">
-                    <!-- Messages injected here -->
-                    <div class="text-center text-zinc-600 text-xs mt-10">Bem-vindo ao chat ao vivo!</div>
+            <!-- Conteúdo: CHAT (Padrão no mobile para interatividade) -->
+            <div id="content-chat" class="flex-1 flex flex-col min-h-0 relative">
+                <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar pb-2">
+                    <!-- Mensagens entram aqui -->
+                    <div class="text-center text-zinc-600 text-xs mt-4">Bem-vindo ao chat ao vivo!</div>
                 </div>
-                <div class="p-3 border-t border-white/10 bg-black/20">
-                    <form onsubmit="sendMessage(event)" class="flex gap-2">
-                        <input id="chat-input" type="text" class="flex-1 bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-violet-500 transition" placeholder="Digite algo..." autocomplete="off">
-                        <button type="submit" class="bg-violet-600 hover:bg-violet-500 text-white p-2 rounded-lg transition">
-                            <i data-lucide="send" class="w-4 h-4"></i>
+                
+                <!-- Input Area Fixa Embaixo -->
+                <div class="p-2 md:p-3 border-t border-white/10 bg-[#121212] shrink-0 w-full z-50">
+                    <form onsubmit="sendMessage(event)" class="flex gap-2 w-full">
+                        <input id="chat-input" type="text" class="flex-1 bg-white/5 border border-white/10 rounded-full px-4 py-2 text-sm text-white focus:outline-none focus:border-violet-500 transition placeholder-zinc-600" placeholder="Digite algo..." autocomplete="off">
+                        <button type="submit" class="bg-violet-600 hover:bg-violet-500 text-white w-10 h-10 rounded-full flex items-center justify-center transition shrink-0 shadow-lg shadow-violet-900/20">
+                            <i data-lucide="send" class="w-4 h-4 ml-0.5"></i>
                         </button>
                     </form>
                 </div>
             </div>
+
+            <!-- Conteúdo: GRADE -->
+            <div id="content-grade" class="flex-1 overflow-y-auto p-4 space-y-2 no-scrollbar hidden">
+                <div id="schedule-day-label" class="text-center text-xs text-violet-400 font-bold uppercase mb-2 tracking-widest bg-white/5 py-1 rounded">...</div>
+                <div id="schedule-list"></div>
+                <div class="text-[10px] text-center text-zinc-600 mt-4 mb-10 md:mb-0">Starlight Broadcast System</div>
+            </div>
         </aside>
     </div>
 
-    <!-- Link para o JavaScript separado -->
+    <!-- Script Principal -->
     <script type="module" src="script.js"></script>
 </body>
 </html>
