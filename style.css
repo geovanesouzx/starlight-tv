@@ -1,57 +1,40 @@
-/* --- VARIAVEIS DE TEMA --- */
-:root {
-    --bg-primary: #000000;
-    --bg-secondary: #0f0f0f;
-    --bg-panel: rgba(18, 18, 18, 0.85);
-    --bg-player-wrapper: #000000;
-    --text-primary: #ffffff;
-    --text-secondary: #a1a1aa;
-    --border-color: rgba(255, 255, 255, 0.1);
-    --input-bg: rgba(255, 255, 255, 0.05);
-    --toast-bg: #1f1f22;
-}
-
-body.light-mode {
-    --bg-primary: #f4f4f5;
-    --bg-secondary: #ffffff;
-    --bg-panel: rgba(255, 255, 255, 0.95);
-    --bg-player-wrapper: #e4e4e7;
-    --text-primary: #18181b;
-    --text-secondary: #52525b;
-    --border-color: rgba(0, 0, 0, 0.1);
-    --input-bg: #f4f4f5;
-    --toast-bg: #ffffff;
-}
-
-/* Reset Básico */
 body {
     font-family: 'Outfit', sans-serif;
-    min-height: 100dvh;
-    background-color: var(--bg-primary);
-    color: var(--text-primary);
-    transition: background-color 0.3s, color 0.3s;
+    background: linear-gradient(135deg, #09090b 0%, #18181b 100%);
+    color: white;
+    height: 100vh;
+    overflow: hidden;
 }
 
-/* Glass Effect Desktop */
-@media (min-width: 768px) {
-    .glass-panel {
-        background: var(--bg-panel);
-        backdrop-filter: blur(20px);
-        border: 1px solid var(--border-color);
-        box-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.1);
-        border-radius: 24px;
-    }
+/* Glass Effect */
+.glass-panel {
+    background: rgba(20, 20, 20, 0.6);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+    border-radius: 24px;
 }
 
-/* Scrollbars Ocultas mas funcionais */
+.active-program { 
+    background: linear-gradient(90deg, rgba(139, 92, 246, 0.2) 0%, transparent 100%); 
+    border-left: 3px solid #8b5cf6; 
+}
+
 .no-scrollbar::-webkit-scrollbar { display: none; }
-.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* Utilitários de Vídeo */
-video.force-cover { object-fit: cover !important; }
-video.force-contain { object-fit: contain !important; }
+/* Video Container */
+.video-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: black;
+    border-radius: 20px;
+    overflow: hidden;
+}
 
-/* Animações e Efeitos */
+video { width: 100%; height: 100%; object-fit: cover; }
+
+/* Loading/Standby Animations */
 @keyframes pulse-ring {
     0% { transform: scale(0.8); opacity: 0.5; }
     100% { transform: scale(2); opacity: 0; }
@@ -65,197 +48,51 @@ video.force-contain { object-fit: contain !important; }
     animation: pulse-ring 2s infinite;
 }
 
-/* Inputs Unificados */
-.input-auth, .input-settings {
-    background: var(--input-bg);
-    border: 1px solid var(--border-color);
-    color: var(--text-primary);
-    padding: 14px;
+.fake-fullscreen { position: fixed !important; top: 0; left: 0; width: 100vw !important; height: 100vh !important; z-index: 9999; background: black; border-radius: 0 !important; }
+.controls-hidden { opacity: 0 !important; pointer-events: none !important; }
+.hide-cursor { cursor: none; }
+
+/* Inputs Modernos */
+.input-auth {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    padding: 12px;
     border-radius: 12px;
     width: 100%;
     outline: none;
     transition: 0.3s;
-    font-size: 16px; 
 }
-.input-auth:focus, .input-settings:focus {
+.input-auth:focus {
     border-color: #8b5cf6;
-    background: rgba(139, 92, 246, 0.05);
-}
-.input-auth::placeholder, .input-settings::placeholder {
-    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.1);
 }
 
-/* Abas */
+/* Tabs */
 .tab-btn {
-    padding: 14px;
+    padding: 12px;
     font-weight: 600;
-    font-size: 0.9rem;
-    color: var(--text-secondary);
+    color: #a1a1aa;
     border-bottom: 2px solid transparent;
     transition: 0.3s;
     flex: 1;
     text-align: center;
 }
 .tab-btn.active {
-    color: var(--text-primary);
-    border-bottom-color: #8b5cf6;
-    background: linear-gradient(to top, rgba(139,92,246,0.05), transparent);
-}
-
-/* --- MENSAGENS DO CHAT (CORRIGIDO) --- */
-.chat-msg {
-    background: var(--input-bg); /* Fundo unificado */
-    border-radius: 16px;
-    padding: 10px 14px;
-    border: 1px solid var(--border-color);
-    max-width: 90%; /* Mais largo no mobile */
-    position: relative;
-    transition: transform 0.1s linear; /* Para o swipe */
-    color: var(--text-primary);
-    will-change: transform;
-}
-
-/* Diferenciação apenas na borda/alinhamento */
-.chat-msg.mine {
-    align-self: flex-end;
-    border-bottom-right-radius: 4px;
-    margin-left: auto; /* Força alinhamento à direita */
-}
-.chat-msg:not(.mine) {
-    align-self: flex-start;
-    border-top-left-radius: 4px;
-    margin-right: auto;
-}
-
-/* Ações da Mensagem (Reply/Delete) - Flutuante */
-.msg-actions {
-    position: absolute;
-    top: -12px;
-    right: 10px;
-    display: flex;
-    gap: 4px;
-    opacity: 0;
-    transition: opacity 0.2s;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: 20px;
-    padding: 4px 8px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-    z-index: 10;
-}
-/* No mobile, ações da minha mensagem ficam levemente visíveis para indicar interatividade */
-.chat-msg:hover .msg-actions, 
-.chat-msg.mine .msg-actions { 
-    opacity: 1; 
-}
-@media (max-width: 768px) {
-    .msg-actions { opacity: 0; } /* No mobile oculta por padrão pra não poluir, aparece no toque/swipe */
-    .chat-msg.swiped .msg-actions { opacity: 1; }
-}
-
-.msg-action-btn {
-    padding: 4px;
-    border-radius: 50%;
-    cursor: pointer;
-    color: var(--text-secondary);
-    transition: 0.2s;
-}
-.msg-action-btn:hover { color: var(--text-primary); background: var(--input-bg); }
-.msg-action-btn.delete:hover { color: #ef4444; background: rgba(239, 68, 68, 0.1); }
-
-/* Modais */
-.custom-modal {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    color: var(--text-primary);
-}
-
-/* Controles do Player */
-.control-btn {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
     color: white;
-    transition: all 0.2s;
-}
-.control-btn:hover { background: white; color: black; transform: scale(1.1); }
-
-/* Seleção de Cores */
-.color-option.selected {
-    ring-width: 3px;
-    ring-color: var(--text-primary);
-    transform: scale(1.1);
-    border: 2px solid white; 
-    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    border-bottom-color: #8b5cf6;
 }
 
-/* Toast Notification */
-#toast-container {
-    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-    z-index: 9999; display: flex; flex-direction: column; gap: 10px; pointer-events: none;
-    width: 90%; max-width: 400px;
+/* Chat Messages */
+.chat-msg {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    border: 1px solid rgba(255,255,255,0.05);
 }
-.toast {
-    background: var(--toast-bg); color: var(--text-primary); padding: 12px 20px;
-    border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); border: 1px solid var(--border-color);
-    display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500;
-    animation: slideDown 0.3s ease-out; pointer-events: auto;
-}
-@keyframes slideDown { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-
-/* Grid de GIFs */
-.gif-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-    width: 100%;
-}
-.gif-item {
-    cursor: pointer;
-    border-radius: 8px;
-    overflow: hidden;
-    border: 2px solid transparent;
-    width: 100%;
-    height: 120px;
-    object-fit: cover;
-    background: #27272a;
-}
-.gif-item:hover { border-color: #8b5cf6; }
-
-/* Grade de Programação */
-.active-program { 
-    background: linear-gradient(90deg, rgba(139, 92, 246, 0.15) 0%, transparent 100%); 
-    border-left: 2px solid #8b5cf6; 
-}
-
-/* Ajustes Específicos para Mobile */
-@media (max-width: 768px) {
-    /* Player fixo no topo, controles visíveis ao toque */
-    #video-controls { 
-        opacity: 0; 
-        background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 60%); 
-        transition: opacity 0.3s;
-    }
-    #video-wrapper:hover #video-controls,
-    #video-wrapper:active #video-controls {
-        opacity: 1;
-    }
-    
-    /* Container do vídeo no mobile */
-    #mobile-video-container { 
-        position: sticky; 
-        top: 0; 
-        z-index: 50; 
-        /* Altura controlada para deixar espaço pro chat */
-    }
-    
-    /* Ajuste da bolha para facilitar o swipe */
-    .chat-msg {
-        touch-action: pan-y; /* Permite scroll vertical, mas horizontal é capturado pelo JS */
-    }
+.chat-msg.mine {
+    background: rgba(139, 92, 246, 0.1);
+    border-color: rgba(139, 92, 246, 0.2);
+    margin-left: 20px;
 }
