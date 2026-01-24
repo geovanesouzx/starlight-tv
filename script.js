@@ -944,7 +944,7 @@ function initAdSystem() {
         // Trigger at 50%
         // Check if global ads enabled in settings
         if(globalSettings.adsEnabled !== false) { // Defaults to true if not set
-             const durSec = currentProgram.duration * 60;
+             const durSec = getTotalDurationSeconds(currentProgram);
              const midPoint = durSec / 2;
              
              if (!adHasPlayedForThisProgram && adLibrary.length > 0) {
@@ -1041,7 +1041,18 @@ function createFloatingReaction(emoji) {
     setTimeout(() => el.remove(), 3000);
 }
 
-// 3. AUTO-DJ LOGIC (CORRIGIDA PARA DAY-OVERFLOW)
+// Helper: Get Duration in Seconds based on Type
+function getTotalDurationSeconds(item) {
+    // If Bumpers/Ads, assume seconds (Admin usually saves them as such, or we define convention)
+    // Actually, Admin generator saves Bumpers with duration in SECONDS.
+    // Standard Movies/Series are usually MINUTES.
+    if (['Vinheta', 'Comercial', 'Propaganda'].includes(item.category)) {
+        return parseInt(item.duration); 
+    }
+    return parseInt(item.duration) * 60;
+}
+
+// 3. AUTO-DJ LOGIC (PRECISE SECONDS)
 function checkScheduleLoop() {
     if(!auth.currentUser || isAdPlaying) return; // Don't check if Ad is playing
     
@@ -1049,7 +1060,9 @@ function checkScheduleLoop() {
     // Get current day string YYYY-MM-DD
     const todayStr = now.toISOString().split('T')[0];
     const currentDay = now.getDay();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    
+    // Calculate Current Total Seconds from Midnight
+    const currentTotalSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
 
     // 1. Check Admin Override First
     let nextActiveItem = allScheduleItems.find(item => item.active === true);
@@ -1066,30 +1079,31 @@ function checkScheduleLoop() {
         });
 
         nextActiveItem = todaysItems.find(item => {
-            const [h, m] = item.time.split(':').map(Number);
-            const startMins = h * 60 + m;
+            const parts = item.time.split(':').map(Number);
+            const h = parts[0];
+            const m = parts[1];
+            const s = parts[2] || 0; // Support HH:MM:SS
             
-            // Duration Logic: Check if minutes or seconds
-            let durationMins = parseInt(item.duration) || 30;
-            // Hack: If it's a Bumper (Vinheta) and duration > 10, it might be stored as seconds but logic needs mins?
-            // Actually Admin Generator adds bumpers with duration in Seconds?
-            // Let's assume `duration` field in Schedule is always Minutes-ish or handled.
-            // If category is Vinheta, duration might be small (0.5 mins).
+            const startSeconds = h * 3600 + m * 60 + s;
+            const durationSeconds = getTotalDurationSeconds(item);
             
-            // Fix for bumpers from Admin Generator: generator calculates 'time' correctly for next item.
-            // So we just need to see if we are in the slot.
-            // But if duration is in seconds (e.g. 15), `parseInt` gives 15. That's 15 mins. Too long.
-            if(item.category === 'Vinheta' && durationMins < 1) durationMins = 1; // Minimum 1 min slot for logic stability
+            // Logic fix for Bumpers < 1 min stability if parsed wrong
+            let finalDur = durationSeconds;
+            if (finalDur < 1) finalDur = 30; // Min safe duration
 
-            const endMins = startMins + durationMins;
-            return currentMinutes >= startMins && currentMinutes < endMins;
+            const endSeconds = startSeconds + finalDur;
+            
+            return currentTotalSeconds >= startSeconds && currentTotalSeconds < endSeconds;
         });
 
         if (nextActiveItem) {
-            const [h, m] = nextActiveItem.time.split(':').map(Number);
-            const startMins = h * 60 + m;
-            const elapsedMins = currentMinutes - startMins;
-            timeOffset = elapsedMins * 60 + now.getSeconds();
+            const parts = nextActiveItem.time.split(':').map(Number);
+            const h = parts[0];
+            const m = parts[1];
+            const s = parts[2] || 0;
+            const startSeconds = h * 3600 + m * 60 + s;
+            
+            timeOffset = currentTotalSeconds - startSeconds;
         }
     }
 
@@ -1101,18 +1115,18 @@ function checkScheduleLoop() {
     }
 
     // --- TICKER LOGIC (ATUALIZADA) ---
-    updateTickerLogic(currentMinutes, currentDay);
+    updateTickerLogic(currentTotalSeconds, currentDay);
 }
 
 let currentTickerMsg = "";
 let tickerHideTimeout = null;
 
-function updateTickerLogic(currentMinutes, currentDay) {
+function updateTickerLogic(currentTotalSeconds, currentDay) {
     const todaysItems = allScheduleItems.filter(i => parseInt(i.day) === currentDay);
     const nextItem = todaysItems.find(item => {
-        const [h, m] = item.time.split(':').map(Number);
-        const startMinutes = h * 60 + m;
-        return startMinutes > currentMinutes;
+        const parts = item.time.split(':').map(Number);
+        const startSeconds = parts[0] * 3600 + parts[1] * 60 + (parts[2]||0);
+        return startSeconds > currentTotalSeconds;
     });
 
     const tickerEl = document.getElementById('ticker-float');
@@ -1131,15 +1145,17 @@ function updateTickerLogic(currentMinutes, currentDay) {
             badge = "NEWS";
          } else if (nextItem) {
             // Auto Mode
-            const [h, m] = nextItem.time.split(':').map(Number);
-            const startMinutes = h * 60 + m;
-            const diff = startMinutes - currentMinutes;
+            const parts = nextItem.time.split(':').map(Number);
+            const startSeconds = parts[0] * 3600 + parts[1] * 60 + (parts[2]||0);
+            
+            const diffSeconds = startSeconds - currentTotalSeconds;
+            const diffMins = Math.ceil(diffSeconds / 60);
 
-            if (diff <= 5 && diff > 0) {
+            if (diffMins <= 5 && diffMins > 0) {
                 shouldShow = true;
-                message = `${nextItem.title} começa em ${diff} min`;
+                message = `${nextItem.title} começa em ${diffMins} min`;
                 badge = "EM BREVE";
-            } else if (diff <= 1) {
+            } else if (diffMins <= 1) {
                  shouldShow = true;
                  message = `A SEGUIR: ${nextItem.title}`;
                  badge = "A SEGUIR";
@@ -1150,7 +1166,6 @@ function updateTickerLogic(currentMinutes, currentDay) {
     if (shouldShow) {
         if (message !== currentTickerMsg) {
             currentTickerMsg = message;
-            
             tickerText.innerText = message;
             tickerBadge.innerText = badge;
             tickerEl.classList.add('active');
@@ -1199,14 +1214,15 @@ function playProgram(item, offsetSeconds) {
     }
 }
 
-// NEW: FORCE SYNC FUNCTION
+// NEW: FORCE SYNC FUNCTION (PRECISE)
 window.forceSync = () => {
     if(currentProgram) {
         const now = new Date();
-        const [h, m] = currentProgram.time.split(':').map(Number);
-        const startMins = h * 60 + m;
-        const currentMins = now.getHours() * 60 + now.getMinutes();
-        const offset = ((currentMins - startMins) * 60) + now.getSeconds();
+        const parts = currentProgram.time.split(':').map(Number);
+        const startSeconds = parts[0] * 3600 + parts[1] * 60 + (parts[2]||0);
+        
+        const currentTotalSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+        const offset = currentTotalSeconds - startSeconds;
         
         videoElement.currentTime = offset;
         videoElement.play();
@@ -1298,7 +1314,12 @@ window.openProgramDetails = (id) => {
     document.getElementById('modal-title').innerText = item.title;
     document.getElementById('modal-desc').innerText = item.desc || 'Sem descrição detalhada.';
     document.getElementById('modal-time').innerText = item.time;
-    document.getElementById('modal-duration').innerText = (item.duration || 30) + " min";
+    
+    // Format duration for Modal
+    let durText = item.duration + " min";
+    if(['Vinheta', 'Comercial'].includes(item.category)) durText = item.duration + " seg";
+    document.getElementById('modal-duration').innerText = durText;
+    
     document.getElementById('modal-category').innerText = item.category || 'Geral';
     
     document.getElementById('program-modal').classList.add('open');
@@ -1455,10 +1476,9 @@ function updateMuteIcon() {
 videoElement.addEventListener('timeupdate', () => {
     if(currentProgram) {
         // UI progress update (just visual)
-        // Use total duration vs currentTime of video element
-        const total = currentProgram.duration * 60;
+        const totalDurationSec = getTotalDurationSeconds(currentProgram);
         const current = videoElement.currentTime; 
-        const pct = Math.min(100, Math.max(0, (current / total) * 100));
+        const pct = Math.min(100, Math.max(0, (current / totalDurationSec) * 100));
         const pbar = document.getElementById('progress-bar');
         if(pbar) pbar.style.width = `${pct}%`;
     }
