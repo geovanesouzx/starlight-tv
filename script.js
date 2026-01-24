@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-app.js";
 import { getFirestore, doc, onSnapshot, collection, getDocs, limit, query, setDoc, getDoc, addDoc, orderBy, serverTimestamp, where, updateDoc, deleteDoc, increment, runTransaction } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-auth.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.2.0/firebase-auth.js";
 
 // Configuração Firebase
 const firebaseConfig = {
@@ -19,7 +19,6 @@ const db = getFirestore(app);
 
 // API KEYS (Main + Fallback Array)
 const IMGUR_CLIENT_ID = "513bb727cecf9ac";
-// Fallback keys for GIPHY to handle errors
 const GIPHY_KEYS = [
     "8Zuu3f4ZbDCcWUOP6HptgzrJ4ZCPN0ZN", 
     "wSTSkifLdmqGRMEg1MXb0V3zD2uhxOTT", 
@@ -29,6 +28,7 @@ let currentGiphyKeyIndex = 0;
 
 // Elementos DOM
 const videoElement = document.getElementById('main-video');
+const adPlayer = document.getElementById('ad-player'); // NEW: Player de Anúncios
 const standbyScreen = document.getElementById('standby-screen');
 const loginScreen = document.getElementById('login-screen');
 const usernameScreen = document.getElementById('username-screen');
@@ -36,18 +36,24 @@ const appContainer = document.getElementById('app-container');
 const loader = document.getElementById('app-loader');
 
 // Estado
-let allScheduleItems = []; // Guarda TUDO, não filtra por dia no snapshot
+let allScheduleItems = []; 
 let currentProgram = null;
 let hls = null;
 let globalSettings = {};
 let currentUserData = null;
 let isVideoFitCover = true;
 let selectedTheme = 'default';
-let replyingTo = null; // Stores message object being replied to
+let replyingTo = null; 
 let longPressTimer = null;
 let pendingDeleteId = null;
 let localTickerEnabled = localStorage.getItem('local_ticker_enabled') !== 'false';
 let heartbeatInterval;
+
+// NEW: Ad Logic State
+let adLibrary = [];
+let isAdPlaying = false;
+let adHasPlayedForThisProgram = false;
+let videoSavedTime = 0;
 
 // ==========================================
 // 0. UI HELPERS (Settings, Themes, Modals)
@@ -63,8 +69,6 @@ if(document.getElementById('pref-ticker')) {
     document.getElementById('pref-ticker').checked = localTickerEnabled;
 }
 
-// --- NOVO: SISTEMA DE DIÁLOGO CUSTOMIZADO ---
-// type: 'alert' | 'confirm' | 'success' | 'error'
 window.showDialog = ({ title, message, type = 'alert', confirmText = 'Confirmar', cancelText = 'Cancelar', onConfirm = null }) => {
     const dialog = document.getElementById('custom-dialog');
     const dTitle = document.getElementById('custom-dialog-title');
@@ -100,7 +104,6 @@ window.showDialog = ({ title, message, type = 'alert', confirmText = 'Confirmar'
     }
     lucide.createIcons();
 
-    // Buttons Logic
     if (type === 'confirm') {
         const btnCancel = document.createElement('button');
         btnCancel.className = 'dialog-btn dialog-btn-secondary';
@@ -108,7 +111,7 @@ window.showDialog = ({ title, message, type = 'alert', confirmText = 'Confirmar'
         btnCancel.onclick = closeDialog;
         
         const btnConfirm = document.createElement('button');
-        btnConfirm.className = 'dialog-btn dialog-btn-danger'; // Usually confirm is destructive (delete)
+        btnConfirm.className = 'dialog-btn dialog-btn-danger'; 
         btnConfirm.innerText = confirmText;
         btnConfirm.onclick = () => {
             if (onConfirm) onConfirm();
@@ -118,7 +121,6 @@ window.showDialog = ({ title, message, type = 'alert', confirmText = 'Confirmar'
         dActions.appendChild(btnCancel);
         dActions.appendChild(btnConfirm);
     } else {
-        // Alert/Success/Error just needs OK
         const btnOk = document.createElement('button');
         btnOk.className = 'dialog-btn dialog-btn-primary';
         btnOk.innerText = 'OK';
@@ -135,12 +137,11 @@ window.closeDialog = () => {
 
 window.openSettings = () => {
     document.getElementById('settings-modal').classList.add('open');
-    
     if(currentUserData) {
         document.getElementById('edit-username').value = currentUserData.username || '';
         document.getElementById('edit-avatar-url').value = currentUserData.avatar || '';
         if(auth.currentUser) {
-            document.getElementById('settings-current-email').innerText = auth.currentUser.email;
+            document.getElementById('settings-current-email').innerText = auth.currentUser.email || 'Anônimo';
         }
         window.updateAvatarPreview(currentUserData.avatar || '');
     }
@@ -388,6 +389,7 @@ function enterApp(isAutoLogin = false) {
     
     initListeners();
     initChat();
+    initAdSystem(); // NEW: Iniciar sistema de ads
     checkScheduleLoop();
     setInterval(checkScheduleLoop, 1000);
 }
@@ -901,12 +903,13 @@ function initListeners() {
         optEl.innerHTML = '';
         widget.classList.add('active');
 
-        // Calc totals
-        const total = Object.values(data.votes || {}).reduce((a,b)=>a+b, 0);
+        // Calc totals - Handle options array with votes
+        const options = data.options || [];
+        const total = options.reduce((acc, curr) => acc + (curr.votes || 0), 0);
         const myVote = localStorage.getItem(`poll_voted_${snap.id}`); // Prevent multi vote
 
-        data.options.forEach((opt, idx) => {
-            const count = data.votes ? (data.votes[idx] || 0) : 0;
+        options.forEach((opt, idx) => {
+            const count = opt.votes || 0;
             const pct = total > 0 ? Math.round((count / total) * 100) : 0;
             
             const btn = document.createElement('button');
@@ -915,7 +918,7 @@ function initListeners() {
             
             btn.innerHTML = `
                 <div class="flex justify-between">
-                    <span>${opt}</span>
+                    <span>${opt.text}</span>
                     <span>${pct}%</span>
                 </div>
                 <div class="poll-bar-bg"><div class="poll-bar-fill" style="width:${pct}%"></div></div>
@@ -927,19 +930,92 @@ function initListeners() {
     });
 }
 
-// --- POLL VOTING ---
+// --- NEW: AD SYSTEM INIT ---
+function initAdSystem() {
+    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'library_ads'), (snap) => {
+        adLibrary = [];
+        snap.forEach(d => adLibrary.push(d.data()));
+    });
+
+    // Listen to video time for mid-roll trigger
+    videoElement.addEventListener('timeupdate', () => {
+        if(!currentProgram || isAdPlaying || currentProgram.category === 'Vinheta') return;
+        
+        // Trigger at 50%
+        // Check if global ads enabled in settings
+        if(globalSettings.adsEnabled !== false) { // Defaults to true if not set
+             const durSec = currentProgram.duration * 60;
+             const midPoint = durSec / 2;
+             
+             if (!adHasPlayedForThisProgram && adLibrary.length > 0) {
+                 // Trigger window: 5 seconds around midpoint
+                 if (videoElement.currentTime >= midPoint && videoElement.currentTime < midPoint + 5) {
+                     playAd();
+                 }
+             }
+        }
+    });
+
+    adPlayer.addEventListener('ended', finishAd);
+    
+    // Ad Progress bar
+    adPlayer.addEventListener('timeupdate', () => {
+        const pct = (adPlayer.currentTime / adPlayer.duration) * 100;
+        document.getElementById('ad-progress-bar').style.width = `${pct}%`;
+    });
+}
+
+function playAd() {
+    const ad = adLibrary[Math.floor(Math.random() * adLibrary.length)];
+    if(!ad) return;
+
+    console.log("Playing Ad:", ad.title);
+    isAdPlaying = true;
+    adHasPlayedForThisProgram = true;
+    
+    // Pause main content
+    videoElement.pause();
+    
+    // Show Overlay
+    document.getElementById('ad-overlay').classList.remove('hidden');
+    
+    // Load and Play Ad
+    adPlayer.src = ad.url;
+    adPlayer.play();
+}
+
+function finishAd() {
+    console.log("Ad Finished");
+    document.getElementById('ad-overlay').classList.add('hidden');
+    isAdPlaying = false;
+    
+    // Resume main content
+    videoElement.play();
+}
+
+// --- POLL VOTING WITH TRANSACTION ---
 window.castVote = async (index) => {
     const pollRef = doc(db, 'artifacts', appId, 'public', 'data', 'widgets', 'poll');
-    const pollSnap = await getDoc(pollRef);
-    if(!pollSnap.exists()) return;
     
-    if(localStorage.getItem(`poll_voted_${pollSnap.id}`)) return;
+    if(localStorage.getItem(`poll_voted_poll`)) return; // Simple local check (poll ID is singleton)
 
-    localStorage.setItem(`poll_voted_${pollSnap.id}`, index);
-    
-    await updateDoc(pollRef, {
-        [`votes.${index}`]: increment(1)
-    });
+    try {
+        await runTransaction(db, async (transaction) => {
+            const sfDoc = await transaction.get(pollRef);
+            if (!sfDoc.exists()) throw "Document does not exist!";
+            
+            const data = sfDoc.data();
+            const newOptions = [...data.options];
+            // Increment vote safely
+            newOptions[index].votes = (newOptions[index].votes || 0) + 1;
+            
+            transaction.update(pollRef, { options: newOptions });
+        });
+        
+        localStorage.setItem(`poll_voted_poll`, index);
+    } catch (e) {
+        console.error("Vote failed: ", e);
+    }
 };
 
 // --- REACTIONS LOGIC ---
@@ -967,8 +1043,11 @@ function createFloatingReaction(emoji) {
 
 // 3. AUTO-DJ LOGIC (CORRIGIDA PARA DAY-OVERFLOW)
 function checkScheduleLoop() {
-    if(!auth.currentUser) return;
+    if(!auth.currentUser || isAdPlaying) return; // Don't check if Ad is playing
+    
     const now = new Date();
+    // Get current day string YYYY-MM-DD
+    const todayStr = now.toISOString().split('T')[0];
     const currentDay = now.getDay();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
@@ -978,43 +1057,31 @@ function checkScheduleLoop() {
 
     // 2. If no admin override, find what SHOULD be playing now based on schedule
     if (!nextActiveItem) {
-        // Check if something from yesterday is still playing (Overflow)
-        const prevDay = (currentDay + 6) % 7; 
-        // IMPORTANT: String comparison to avoid type issues
-        const prevItems = allScheduleItems.filter(i => String(i.day) === String(prevDay));
         
-        const overflowItem = prevItems.find(item => {
-            const [h, m] = item.time.split(':').map(Number);
-            const startMins = h * 60 + m;
-            const duration = parseInt(item.duration) || 30;
-            const endMins = startMins + duration;
-            
-            if (endMins > 1440) { // Ends after midnight
-                const spillOver = endMins - 1440; // Minutes into current day
-                return currentMinutes < spillOver;
-            }
+        // STRATEGY: Check TODAY first by Date string, then by Day index (legacy)
+        const todaysItems = allScheduleItems.filter(i => {
+            if(i.date) return i.date === todayStr;
+            if(i.day !== undefined && !i.date) return String(i.day) === String(currentDay);
             return false;
         });
 
-        if (overflowItem) {
-            nextActiveItem = overflowItem;
-            const [h, m] = overflowItem.time.split(':').map(Number);
-            const startMins = h * 60 + m;
-            const elapsedMins = (1440 - startMins) + currentMinutes;
-            timeOffset = elapsedMins * 60 + now.getSeconds(); 
-        }
-    }
-
-    if (!nextActiveItem) {
-        // Check Current Day Schedule
-        // IMPORTANT: String comparison to avoid type issues
-        const todaysItems = allScheduleItems.filter(i => String(i.day) === String(currentDay));
-        
         nextActiveItem = todaysItems.find(item => {
             const [h, m] = item.time.split(':').map(Number);
             const startMins = h * 60 + m;
-            const duration = parseInt(item.duration) || 30;
-            const endMins = startMins + duration;
+            
+            // Duration Logic: Check if minutes or seconds
+            let durationMins = parseInt(item.duration) || 30;
+            // Hack: If it's a Bumper (Vinheta) and duration > 10, it might be stored as seconds but logic needs mins?
+            // Actually Admin Generator adds bumpers with duration in Seconds?
+            // Let's assume `duration` field in Schedule is always Minutes-ish or handled.
+            // If category is Vinheta, duration might be small (0.5 mins).
+            
+            // Fix for bumpers from Admin Generator: generator calculates 'time' correctly for next item.
+            // So we just need to see if we are in the slot.
+            // But if duration is in seconds (e.g. 15), `parseInt` gives 15. That's 15 mins. Too long.
+            if(item.category === 'Vinheta' && durationMins < 1) durationMins = 1; // Minimum 1 min slot for logic stability
+
+            const endMins = startMins + durationMins;
             return currentMinutes >= startMins && currentMinutes < endMins;
         });
 
@@ -1041,7 +1108,6 @@ let currentTickerMsg = "";
 let tickerHideTimeout = null;
 
 function updateTickerLogic(currentMinutes, currentDay) {
-    // Find next program in CURRENT DAY schedule
     const todaysItems = allScheduleItems.filter(i => parseInt(i.day) === currentDay);
     const nextItem = todaysItems.find(item => {
         const [h, m] = item.time.split(':').map(Number);
@@ -1082,7 +1148,6 @@ function updateTickerLogic(currentMinutes, currentDay) {
     }
 
     if (shouldShow) {
-        // SÓ ATUALIZA SE A MENSAGEM MUDOU
         if (message !== currentTickerMsg) {
             currentTickerMsg = message;
             
@@ -1090,16 +1155,12 @@ function updateTickerLogic(currentMinutes, currentDay) {
             tickerBadge.innerText = badge;
             tickerEl.classList.add('active');
             
-            // Clear any existing hide timer
             if(tickerHideTimeout) clearTimeout(tickerHideTimeout);
-            
-            // Set new hide timer (5 seconds)
             tickerHideTimeout = setTimeout(() => {
                 tickerEl.classList.remove('active');
             }, 5000);
         }
     } else {
-        // Se não deve mostrar nada, reseta
         if (currentTickerMsg !== "") {
             tickerEl.classList.remove('active');
             currentTickerMsg = "";
@@ -1122,6 +1183,7 @@ function playProgram(item, offsetSeconds) {
     if (!currentProgram || currentProgram.id !== item.id) {
         console.log("Switching to new program:", item.title);
         currentProgram = item;
+        adHasPlayedForThisProgram = false; // Reset AD flag for new program
         loadStream(item.url, offsetSeconds); // Pass direct offset!
         updateUI(item);
     } else {
@@ -1129,14 +1191,30 @@ function playProgram(item, offsetSeconds) {
         const videoTime = videoElement.currentTime;
         const drift = Math.abs(videoTime - offsetSeconds);
         
-        // If drifted more than 8 seconds (and not paused by user/maintenance), seek
-        if (drift > 8 && !videoElement.paused && !globalSettings.maintenanceMode) { 
-            console.log("Resyncing. Drift:", drift);
-            const syncBadge = document.getElementById('sync-status');
-            syncBadge.classList.remove('hidden');
-            videoElement.currentTime = offsetSeconds;
-            setTimeout(() => syncBadge.classList.add('hidden'), 2000);
+        // If drifted more than 8 seconds (and not paused by user/maintenance/Ad)
+        if (drift > 8 && !videoElement.paused && !globalSettings.maintenanceMode && !isAdPlaying) { 
+            // Only auto-sync if drift is huge, otherwise let manual sync handle it
+            // console.log("Drift detected"); 
         }
+    }
+}
+
+// NEW: FORCE SYNC FUNCTION
+window.forceSync = () => {
+    if(currentProgram) {
+        const now = new Date();
+        const [h, m] = currentProgram.time.split(':').map(Number);
+        const startMins = h * 60 + m;
+        const currentMins = now.getHours() * 60 + now.getMinutes();
+        const offset = ((currentMins - startMins) * 60) + now.getSeconds();
+        
+        videoElement.currentTime = offset;
+        videoElement.play();
+        
+        // Visual Feedback
+        const badge = document.getElementById('sync-status');
+        badge.classList.remove('hidden');
+        setTimeout(() => badge.classList.add('hidden'), 2000);
     }
 }
 
@@ -1169,20 +1247,10 @@ function loadStream(url, startTimeSeconds) {
             playPromise.then(() => {
                 updateMuteIcon();
             }).catch(error => {
-                // Handle Autoplay rejection
                 if (error.name === 'NotAllowedError') {
                     videoElement.muted = true;
-                    videoElement.play().catch(e => {
-                        if(e.name !== 'AbortError') console.error("Muted play error:", e);
-                    });
+                    videoElement.play().catch(e => {});
                 } 
-                // Handle AbortError (interrupted by load/pause) - Silent ignore
-                else if (error.name === 'AbortError') {
-                    // console.log("Play request interrupted"); 
-                } 
-                else {
-                    console.error("Play error:", error);
-                }
             });
         }
     };
@@ -1204,6 +1272,18 @@ function updateUI(item) {
     document.getElementById('program-title').innerText = item.title;
     document.getElementById('program-desc').innerText = item.desc || 'Sem descrição.';
     document.getElementById('program-category').innerText = item.category || 'NO AR';
+    
+    // Visual tweak for Bumpers
+    const isBumper = item.category === 'Vinheta';
+    const pBar = document.getElementById('progress-bar');
+    if(isBumper) {
+        pBar.className = "h-full bg-blue-500 w-0 relative shadow-[0_0_10px_blue]";
+        document.getElementById('program-category').className = "inline-flex items-center gap-2 px-2 py-1 bg-blue-900/30 border border-blue-500/20 rounded text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-2";
+    } else {
+        pBar.className = "h-full bg-gradient-to-r from-[var(--primary-color)] to-[var(--secondary-color)] w-0 relative shadow-[0_0_10px_var(--text-glow)] transition-all duration-1000 ease-linear";
+        document.getElementById('program-category').className = "inline-flex items-center gap-2 px-2 py-1 bg-white/10 border border-white/10 rounded text-[10px] font-bold text-[var(--primary-color)] uppercase tracking-widest mb-2";
+    }
+
     document.getElementById('live-indicator').classList.remove('hidden');
     renderScheduleSidebar(); // Highlights current item
 }
@@ -1328,9 +1408,9 @@ function initChat() {
             // Delete Button (Only Me)
             if (isMe) {
                 actionsHtml += `
-                     <div class="action-btn hover:bg-red-500 hover:border-red-500" onclick="deleteMessage('${msgId}')" title="Apagar">
-                        <i data-lucide="trash-2" class="w-3 h-3"></i>
-                     </div>
+                      <div class="action-btn hover:bg-red-500 hover:border-red-500" onclick="deleteMessage('${msgId}')" title="Apagar">
+                         <i data-lucide="trash-2" class="w-3 h-3"></i>
+                      </div>
                 `;
             }
 
@@ -1376,11 +1456,8 @@ videoElement.addEventListener('timeupdate', () => {
     if(currentProgram) {
         // UI progress update (just visual)
         // Use total duration vs currentTime of video element
-        // Note: HLS live streams might behave differently, but for VOD style playlist this works
         const total = currentProgram.duration * 60;
         const current = videoElement.currentTime; 
-        // This 'current' is relative to the start of the video file, 
-        // but in our synced logic we often seek into it.
         const pct = Math.min(100, Math.max(0, (current / total) * 100));
         const pbar = document.getElementById('progress-bar');
         if(pbar) pbar.style.width = `${pct}%`;

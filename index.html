@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Starlight TV - Liquid Glass</title>
+    <title>Starlight TV - Ao Vivo</title>
     <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/128/705/705062.png">
     
     <!-- Bibliotecas Externas -->
@@ -50,6 +50,23 @@
         </div>
     </div>
 
+    <!-- AD OVERLAY (NOVO: Propaganda) -->
+    <div id="ad-overlay" class="fixed inset-0 z-[180] bg-black hidden flex flex-col items-center justify-center">
+        <div class="absolute top-6 right-6 flex items-center gap-2 bg-black/50 backdrop-blur px-3 py-1.5 rounded-lg border border-white/10 z-50">
+            <div class="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+            <span class="text-[10px] font-bold text-zinc-300 uppercase tracking-widest">Publicidade</span>
+        </div>
+        <!-- Usamos um elemento de vídeo separado para garantir controle total -->
+        <video id="ad-player" class="w-full h-full max-h-screen object-contain" playsinline></video>
+        
+        <div class="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black via-transparent to-transparent z-50">
+            <div class="w-full bg-white/20 h-1 rounded-full overflow-hidden">
+                <div id="ad-progress-bar" class="h-full bg-yellow-400 w-0 transition-all duration-200 ease-linear"></div>
+            </div>
+            <p class="text-center text-[10px] text-zinc-500 mt-2 uppercase tracking-wider">O conteúdo voltará em breve</p>
+        </div>
+    </div>
+
     <!-- CONTEXT MENU (Mobile) -->
     <div id="context-menu">
         <button id="context-delete-btn" class="context-btn">
@@ -57,7 +74,6 @@
         </button>
         <div class="text-[10px] text-center text-zinc-500 mt-2 pb-1">Toque fora para cancelar</div>
     </div>
-    <!-- Overlay transparente para fechar o menu -->
     <div id="context-overlay" class="fixed inset-0 z-[190] hidden" onclick="closeContextMenu()"></div>
 
     <!-- MODAL DE CONFIGURAÇÕES -->
@@ -180,7 +196,6 @@
                         </div>
                     </div>
                 </div>
-
             </div>
         </div>
     </div>
@@ -376,6 +391,11 @@
                         <div class="flex-1 h-2 bg-white/10 rounded-full overflow-hidden backdrop-blur-sm">
                             <div id="progress-bar" class="h-full bg-gradient-to-r from-[var(--primary-color)] to-[var(--secondary-color)] w-0 relative shadow-[0_0_10px_var(--text-glow)] transition-all duration-1000 ease-linear"></div>
                         </div>
+
+                        <!-- NEW: SYNC BUTTON -->
+                        <button onclick="window.forceSync()" class="control-btn-modern text-emerald-400 hover:text-emerald-300 hover:bg-emerald-900/30 border-emerald-500/30" title="Sincronizar">
+                            <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+                        </button>
                         
                         <button onclick="window.toggleZoom()" class="control-btn-modern text-zinc-300" title="Ajustar Zoom">
                             <i id="zoom-icon" data-lucide="rectangle-horizontal" class="w-5 h-5"></i>
