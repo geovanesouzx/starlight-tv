@@ -28,7 +28,7 @@ let currentGiphyKeyIndex = 0;
 
 // Elementos DOM
 const videoElement = document.getElementById('main-video');
-const adPlayer = document.getElementById('ad-player'); // NEW: Player de Anúncios
+const adPlayer = document.getElementById('ad-player'); 
 const standbyScreen = document.getElementById('standby-screen');
 const loginScreen = document.getElementById('login-screen');
 const usernameScreen = document.getElementById('username-screen');
@@ -54,6 +54,11 @@ let adLibrary = [];
 let isAdPlaying = false;
 let adHasPlayedForThisProgram = false;
 let videoSavedTime = 0;
+
+// --- TIMEZONE HELPER ---
+function getBrazilTime() {
+    return new Date(new Date().toLocaleString("en-US", {timeZone: "America/Sao_Paulo"}));
+}
 
 // ==========================================
 // 0. UI HELPERS (Settings, Themes, Modals)
@@ -1056,7 +1061,7 @@ function getTotalDurationSeconds(item) {
 function checkScheduleLoop() {
     if(!auth.currentUser || isAdPlaying) return; // Don't check if Ad is playing
     
-    const now = new Date();
+    const now = getBrazilTime();
     // Get current day string YYYY-MM-DD
     const todayStr = now.toISOString().split('T')[0];
     const currentDay = now.getDay();
@@ -1217,7 +1222,7 @@ function playProgram(item, offsetSeconds) {
 // NEW: FORCE SYNC FUNCTION (PRECISE)
 window.forceSync = () => {
     if(currentProgram) {
-        const now = new Date();
+        const now = getBrazilTime();
         const parts = currentProgram.time.split(':').map(Number);
         const startSeconds = parts[0] * 3600 + parts[1] * 60 + (parts[2]||0);
         
@@ -1335,7 +1340,8 @@ function renderScheduleSidebar() {
     list.innerHTML = '';
     
     const days = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-    const today = new Date().getDay();
+    const now = getBrazilTime();
+    const today = now.getDay();
     document.getElementById('schedule-day-label').innerText = days[today].toUpperCase();
 
     // Filter for current day view
@@ -1485,9 +1491,9 @@ videoElement.addEventListener('timeupdate', () => {
 });
 
 setInterval(() => {
-    const d = new Date();
+    const now = getBrazilTime();
     const clock = document.getElementById('clock');
-    if(clock) clock.innerText = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    if(clock) clock.innerText = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
 }, 1000);
 
 lucide.createIcons();
